@@ -1,0 +1,20 @@
+// 外部系统唯一出口：页面与 store 只认这里（SIM-002 / SIM-003）
+// 上线时把 USE_MOCK 改为 false 并补 http 实现，页面一行不改
+import * as mock from '@/mock/his'
+
+const USE_MOCK = true
+
+const http = {
+  get: (url) => fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error('接口调用失败，请稍后重试'))))
+}
+
+export const isMockSource = () => USE_MOCK
+
+export const fetchApplyPool = () =>
+  USE_MOCK ? mock.fetchApplyPool() : http.get('/his/day-surgery/applies')
+
+export const fetchPatientArchive = (inpatientNo) =>
+  USE_MOCK ? mock.fetchPatientArchive(inpatientNo) : http.get(`/his/preop/archive?inpatientNo=${inpatientNo}`)
+
+export const fetchExamReports = (patientId) =>
+  USE_MOCK ? mock.fetchExamReports(patientId) : http.get(`/his/preop/reports?patientId=${patientId}`)

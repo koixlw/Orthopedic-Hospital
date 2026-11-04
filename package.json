@@ -1,0 +1,22 @@
+{
+  "name": "preop-demo",
+  "private": true,
+  "version": "1.4.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5417 --strictPort",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4178"
+  },
+  "dependencies": {
+    "vue": "^3.4.38",
+    "vue-router": "^4.4.3",
+    "element-plus": "^2.8.4",
+    "@element-plus/icons-vue": "^2.3.1",
+    "dayjs": "^1.11.13"
+  },
+  "devDependencies": {
+    "vite": "^5.4.8",
+    "@vitejs/plugin-vue": "^5.1.4"
+  }
+}
