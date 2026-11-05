@@ -124,7 +124,8 @@ export const PERM_LABEL = {
   'ord.add': '录入手术医嘱', 'ord.stop': '停止医嘱', 'ord.void': '作废医嘱', 'ord.remove': '移除医嘱',
   'trf.submit': '转普通住院', 'trf.revoke': '撤销转普通住院',
   'dict.edit': '维护基础字典', 'dict.remove': '移除字典项', 'dict.toggle': '启停用字典项',
-  'msg.resend': '重发通知', 'param.save': '修改系统参数', 'sys.reset': '重置演示数据'
+  'msg.resend': '重发通知', 'msg.send': '执行通知发送任务',
+  'msg.tpl': '修改短信通知模板', 'param.save': '修改系统参数', 'sys.reset': '重置演示数据'
 }
 
 /**
@@ -142,7 +143,7 @@ const GRANTS = {
     'dep.transfer', 'dep.withdraw',            // FUNC-DEP-003 转入住院储值金、FUNC-DEP-004 退出并门诊结算
     'adm.confirm', 'adm.modify', 'adm.revoke', // FUNC-ADM-002/004/005
     'chk.confirm', 'chk.cancel', 'chk.print',  // FUNC-CIR-001/002/003
-    'msg.resend'                               // FUNC-MSG-001 重发通知
+    'msg.resend', 'msg.send'                   // FUNC-MSG-001/003 重发通知、执行通知任务（模板编辑仅管理员）
   ],
   CASHIER: [
     // 钱箱角色：缴存、冻结、冲正、门诊结算；不含「转入住院储值金」（DEP-003 属护士）

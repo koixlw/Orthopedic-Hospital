@@ -367,39 +367,65 @@ export function seedCheckins() {
   return []
 }
 
-/* ---------------- 通知 ---------------- */
+/* ---------------- 通知 ----------------
+ * 正文与默认模板保持一致（【四川省骨科医院】+ 分行 + 同一套用词），
+ * 历史记录点「查看」能看到真实下发的内容。
+ */
+const WEEK_CN = ['日', '一', '二', '三', '四', '五', '六']
+const wd = (date) => '周' + WEEK_CN[new Date(String(date).slice(0, 10) + 'T00:00:00').getDay()]
+
 export function seedMessages() {
+  const tip = '术前 8 小时禁食、4 小时禁饮；请提前取下义齿与饰品，术晨勿化妆，并携带患肢 X 线 / MRI 影像资料。'
   return [
     {
-      msgId: 'MSG001', patientId: 'P003', type: 'APPOINTMENT_SUCCESS', channel: '短信',
-      phone: '136****8890', status: 'SENT', planSendTime: dt(-1, 9, 15), sendTime: dt(-1, 9, 15, 22),
+      msgId: 'MSG001', patientId: 'P003', type: 'APPOINTMENT_SUCCESS', tplKey: 'APPOINTMENT_SUCCESS',
+      channel: '短信', phone: '136****8890', status: 'SENT',
+      planSendTime: dt(-1, 9, 15), sendTime: dt(-1, 9, 15, 22), smsCount: 3,
       resendCount: 0, trigger: '创建手术预约 SCH00000001', content:
-        '【日间手术中心】陈国强您好，您的手术已预约成功：' + d(0) + ' 日间 2 间 第 2 台，主刀 李伟，麻醉方式为局部浸润麻醉。请于当日 07:30 前到日间手术中心报到，术前 8 小时禁食、4 小时禁饮，并携带近期腰椎 MRI 片。如需改期请联系 028-8888 6120。'
+        '【四川省骨科医院】陈国强您好，您的手术已预约成功。\n' +
+        '手术日期：' + d(0) + '（' + wd(d(0)) + '）\n' +
+        '手术安排：日间 2 间 第 2 台\n' +
+        '手术科室：脊柱外科 · 主刀：李伟\n' +
+        '麻醉方式：局部浸润麻醉\n' +
+        '请于手术当日 07:30 前到日间手术中心办理入院，' + tip + '请携带身份证、医保卡与住院证。如需改期请致电 028-8888 6120。'
     },
     {
-      msgId: 'MSG002', patientId: 'P004', type: 'PRE_ADMISSION', channel: '短信',
-      phone: '137****1128', status: 'SENT', planSendTime: dt(-1, 9, 0), sendTime: dt(-1, 9, 0, 8),
+      msgId: 'MSG002', patientId: 'P004', type: 'PRE_ADMISSION', tplKey: 'PRE_ADMISSION',
+      channel: '短信', phone: '137****1128', status: 'SENT',
+      planSendTime: dt(-1, 9, 0), sendTime: dt(-1, 9, 0, 8), smsCount: 3,
       resendCount: 0, trigger: '入院前提醒（提前 1 天）', content:
-        '【日间手术中心】赵雪梅您好，您预约的手术时间为' + d(0) + '，请于当日上午 07:30 前到日间手术中心办理入院，携带身份证、医保卡、住院证及右腕 X 线片。术前 8 小时禁食、4 小时禁饮。'
+        '【四川省骨科医院】赵雪梅您好，您预约的手术时间为 ' + d(0) + '（' + wd(d(0)) + '）日间 3 间 第 1 台。\n' +
+        '请于手术前一日 14:00 前到日间手术中心办理入院并完成术前准备（本短信在术前 1 天发送）。\n' +
+        tip + '请携带身份证、医保卡与住院证。'
     },
     {
-      msgId: 'MSG003', patientId: 'P007', type: 'SCHEDULE_CHANGE', channel: '短信',
-      phone: '135****7789', status: 'SENT', planSendTime: dt(-5, 16, 10), sendTime: dt(-5, 16, 10, 40),
+      msgId: 'MSG003', patientId: 'P007', type: 'SCHEDULE_CHANGE', tplKey: 'SCHEDULE_CHANGE',
+      channel: '短信', phone: '135****7789', status: 'SENT',
+      planSendTime: dt(-5, 16, 10), sendTime: dt(-5, 16, 10, 40), smsCount: 2,
       resendCount: 0, trigger: '调整手术安排 SCH00000003', content:
-        '【日间手术中心】周晓峰您好，您的手术时间已调整：原定 ' + d(-4) + ' 日间 1 间 第 1 台，调整为 ' + d(-3) + ' 日间 1 间 第 1 台，请按新时间到院，术前 8 小时禁食。'
+        '【四川省骨科医院】周晓峰您好，您的手术时间已调整：\n' +
+        '原定 ' + d(-4) + '（' + wd(d(-4)) + '）日间 1 间 第 1 台，\n' +
+        '调整为 ' + d(-3) + '（' + wd(d(-3)) + '）日间 1 间 第 1 台，主刀 李伟。\n' +
+        '请按新时间到院，' + tip
     },
     {
-      msgId: 'MSG004', patientId: 'P002', type: 'PRE_ADMISSION', channel: '短信',
-      phone: '139****3306', status: 'FAILED', planSendTime: dt(1, 9, 0), sendTime: '',
+      msgId: 'MSG004', patientId: 'P002', type: 'PRE_ADMISSION', tplKey: 'PRE_ADMISSION',
+      channel: '短信', phone: '139****3306', status: 'FAILED',
+      planSendTime: dt(1, 9, 0), sendTime: '', smsCount: 3,
       resendCount: 0, failReason: '网关返回：号码状态异常（空号/停机）',
       trigger: '入院前提醒（提前 1 天）', content:
-        '【日间手术中心】刘敏您好，您的手术时间为' + d(2) + '，请于前一日上午到日间手术中心完成术前准备，携带肩关节 MRI 片。'
+        '【四川省骨科医院】刘敏您好，您预约的手术时间为 ' + d(2) + '（' + wd(d(2)) + '）日间 1 间 第 1 台。\n' +
+        '请于手术前一日 14:00 前到日间手术中心办理入院并完成术前准备（本短信在术前 1 天发送）。\n' +
+        tip + '请携带身份证、医保卡与住院证。'
     },
     {
-      msgId: 'MSG005', patientId: 'P001', type: 'PRE_ADMISSION', channel: '短信',
-      phone: '138****6721', status: 'PENDING', planSendTime: dt(0, 9, 0), sendTime: '',
-      resendCount: 0, trigger: '入院前提醒（提前 1 天）', content:
-        '【日间手术中心】张建国您好，您预约的手术时间为' + d(0) + '，请于当日上午 07:30 前到日间手术中心办理入院，术前 8 小时禁食，请携带膝关节 MRI 片。'
+      msgId: 'MSG005', patientId: 'P001', type: 'PRE_ADMISSION', tplKey: 'PRE_ADMISSION',
+      channel: '短信', phone: '138****6721', status: 'PENDING',
+      planSendTime: dt(0, 9, 0), sendTime: '', smsCount: 3,
+      resendCount: 0, trigger: '入院前提醒（提前 1 天，补发）', content:
+        '【四川省骨科医院】张建国您好，您预约的手术时间为 ' + d(0) + '（' + wd(d(0)) + '）日间 1 间 第 1 台。\n' +
+        '请于手术前一日 14:00 前到日间手术中心办理入院并完成术前准备（本短信在术前 1 天发送）。\n' +
+        tip + '请携带身份证、医保卡与住院证。'
     }
   ]
 }
@@ -695,3 +721,74 @@ export const FLOW_TYPE = {
 }
 
 export const todayStr = () => fmtDate(new Date())
+
+/* ---------------- 短信通知模板（FUNC-MSG-003 模板可自定义） ----------------
+ * 正文里用 {变量名} 占位，发送时按患者与排程实时渲染。
+ * 模板正文进 store（state.templates），管理员可在「消息通知」页直接编辑。
+ */
+export const TPL_VARS = [
+  { key: '患者姓名', desc: '患者姓名，如「张建国」' },
+  { key: '患者性别', desc: '男 / 女' },
+  { key: '住院号', desc: '住院号，如 D2026001' },
+  { key: '科室', desc: '就诊专科，如「关节外科」' },
+  { key: '手术日期', desc: '手术日，如「2026-11-05」' },
+  { key: '星期', desc: '手术日星期，如「周四」' },
+  { key: '手术间', desc: '手术间，如「日间 1 间」' },
+  { key: '台次', desc: '台次数字，如「2」' },
+  { key: '主刀', desc: '主刀医师' },
+  { key: '麻醉方式', desc: '麻醉方式，如「椎管内麻醉」' },
+  { key: '禁食提示', desc: '取系统参数的「术前禁食提示语」' },
+  { key: '提前天数', desc: '入院前通知提前天数' },
+  { key: '原日期', desc: '仅安排变动模板：调整前日期' },
+  { key: '原手术间', desc: '仅安排变动模板：调整前手术间' },
+  { key: '原台次', desc: '仅安排变动模板：调整前台次' },
+  { key: '医院名称', desc: '固定为「四川省骨科医院」' },
+  { key: '联系电话', desc: '日间手术中心电话' }
+]
+
+export const DEFAULT_TEMPLATES = [
+  {
+    key: 'APPOINTMENT_SUCCESS',
+    type: 'APPOINTMENT_SUCCESS',
+    name: '手术预约成功通知',
+    channel: '短信',
+    enabled: true,
+    note: '创建手术预约后自动发送（招标第 6 项）',
+    content:
+      '【四川省骨科医院】{患者姓名}您好，您的手术已预约成功。\n' +
+      '手术日期：{手术日期}（{星期}）\n' +
+      '手术安排：{手术间} 第 {台次} 台\n' +
+      '手术科室：{科室} · 主刀：{主刀}\n' +
+      '麻醉方式：{麻醉方式}\n' +
+      '请于手术当日 07:30 前到日间手术中心办理入院，{禁食提示}请携带身份证、医保卡与住院证。如需改期请致电 {联系电话}。'
+  },
+  {
+    key: 'PRE_ADMISSION',
+    type: 'PRE_ADMISSION',
+    name: '入院前提醒通知',
+    channel: '短信',
+    enabled: true,
+    note: '手术日前 N 天 09:00 自动发送（招标第 7 项）',
+    content:
+      '【四川省骨科医院】{患者姓名}您好，您预约的手术时间为 {手术日期}（{星期}）{手术间} 第 {台次} 台。\n' +
+      '请于手术前一日 14:00 前到日间手术中心办理入院并完成术前准备（本短信在术前 {提前天数} 天发送）。\n' +
+      '{禁食提示}请携带身份证、医保卡与住院证。'
+  },
+  {
+    key: 'SCHEDULE_CHANGE',
+    type: 'SCHEDULE_CHANGE',
+    name: '手术安排变动通知',
+    channel: '短信',
+    enabled: true,
+    note: '实际安排与预约不一致时发送（招标第 10 项）',
+    content:
+      '【四川省骨科医院】{患者姓名}您好，您的手术时间已调整：\n' +
+      '原定 {原日期} {原手术间} 第 {原台次} 台，\n' +
+      '调整为 {手术日期}（{星期}）{手术间} 第 {台次} 台，主刀 {主刀}。\n' +
+      '请按新时间到院，{禁食提示}'
+  }
+]
+
+export function seedTemplates() {
+  return DEFAULT_TEMPLATES.map((t) => ({ ...t, updatedAt: '', updatedBy: '' }))
+}

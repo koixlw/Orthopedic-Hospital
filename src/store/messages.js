@@ -3,8 +3,10 @@
 import { computed } from 'vue'
 import { state, persist } from './db'
 import { log } from './logs'
+import { assertCan } from '@/utils/guard'
 import { get as getPatient } from './patients'
 import { fmtTime } from '@/utils/format'
+import { render as renderTpl } from './templates'
 
 export const TYPE_MAP = {
   APPOINTMENT_SUCCESS: { label: '预约成功', type: 'primary' },
@@ -35,12 +37,16 @@ export function get(msgId) {
 /** 唯一写入口：只能被业务动作调用（建档、预约、调整、取消、参数保存） */
 export function push({
   patientId, type, channel = '短信', content = '',
-  planSendTime, status = 'PENDING', trigger = '', failReason = ''
+  planSendTime, status = 'PENDING', trigger = '', failReason = '',
+  tplKey = '', vars = {}
 }) {
   const p = getPatient(patientId)
   const phone = p ? p.phone : ''
   const hasPhone = !!phone && !/^\*+$/.test(phone.replace(/[\d*]/g, ''))
   const finalStatus = phone ? status : 'FAILED'
+  // FUNC-MSG-003：正文优先取模板渲染结果；未传 content 时按 type/tplKey 套模板
+  const text = content || renderTpl(tplKey || type, { 患者姓名: p ? p.name : '', ...vars })
+  const tpl = (tplKey || type)
 
   const msg = {
     msgId: 'MSG' + String(state.messages.length + 1).padStart(3, '0'),
@@ -53,7 +59,9 @@ export function push({
     sendTime: finalStatus === 'SENT' ? fmtTime(new Date()) : '',
     resendCount: 0,
     trigger,
-    content,
+    tplKey: tpl,
+    smsCount: Math.max(1, Math.ceil((text || '').length / 70)),
+    content: text,
     failReason: finalStatus === 'FAILED' ? (failReason || (hasPhone ? '网关返回：号码状态异常' : '接收号码为空')) : ''
   }
   state.messages.push(msg)
@@ -82,6 +90,38 @@ export function resend(msgId) {
   })
   persist()
   return msg
+}
+
+/** 到点未发送的提醒（入院前通知用） */
+export function dueList(type) {
+  const now = fmtTime(new Date())
+  return state.messages.filter((m) => m.type === type && m.status === 'PENDING' && (m.planSendTime || '') <= now)
+}
+
+/** FUNC-MSG-003 执行通知任务：把已到发送时间的待发短信置为已发送（真实系统由定时任务触发） */
+export function runDue(type) {
+  assertCan('msg.send', {
+    module: 'MSG', page: '消息通知', action: 'UPDATE',
+    label: '执行通知发送任务', targetType: '通知任务', targetId: 'TASK-' + type, targetName: '到点发送通知任务'
+  })
+  const due = dueList(type)
+  const now = fmtTime(new Date())
+  due.forEach((m) => {
+    m.status = 'SENT'
+    m.sendTime = now
+    m.failReason = ''
+    m.resendCount = m.resendCount || 0
+  })
+  if (due.length) {
+    log({
+      module: 'MSG', page: '消息通知', action: 'UPDATE',
+      targetType: '通知任务', targetId: 'TASK-' + type, targetName: '到点发送通知任务',
+      patientId: null, before: { 待发送: due.length }, after: { 已发送: due.length },
+      reason: '扫描到点的入院前提醒，自动发送 ' + due.length + ' 条'
+    })
+    persist()
+  }
+  return due.length
 }
 
 /** RULE-MSG-001：参数变更后，未发送的入院前提醒按新提前天数重算，返回受影响条数 */

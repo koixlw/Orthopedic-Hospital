@@ -4,7 +4,8 @@ import { reactive } from 'vue'
 import {
   seedPatients, seedAccounts, seedApplies, seedEvals, seedSchedules,
   seedCheckins, seedMessages, seedSettings, seedChargeItems, seedDrugs,
-  seedGroups, seedEvalReasons, seedCharges, seedOrders, seedLogs
+  seedGroups, seedEvalReasons, seedCharges, seedOrders, seedLogs,
+  seedTemplates, DEFAULT_TEMPLATES
 } from '@/mock/dict'
 
 export const STORAGE_KEY = 'PREOP_DEMO_V3'
@@ -25,6 +26,7 @@ function emptyState() {
     orders: [],
     dicts: { items: [], drugs: [], groups: [], evalReasons: [] },
     settings: {},
+    templates: [],
     // 日志用对象包一层：list 只追加，seq 连续，overflow 达上限标记
     logs: { list: [], seq: 0, overflow: false },
     session: { ...DEFAULT_SESSION },
@@ -51,6 +53,7 @@ export function seedAll() {
     evalReasons: seedEvalReasons()
   }
   state.settings = seedSettings()
+  state.templates = seedTemplates()
   const logs = seedLogs()
   state.logs = { list: logs, seq: logs.length, overflow: false }
   state.session = { ...DEFAULT_SESSION }
@@ -101,6 +104,16 @@ export function hydrate() {
     if (state.session.loggedIn === undefined) state.session.loggedIn = true
     if (!state.settings || !state.settings.updatedAt) {
       state.settings = { ...seedSettings(), ...(state.settings || {}) }
+    }
+    // 模板是后加的：旧缓存补默认，缺哪个补哪个，不覆盖已改过的正文
+    if (!Array.isArray(state.templates) || !state.templates.length) {
+      state.templates = seedTemplates()
+    } else {
+      DEFAULT_TEMPLATES.forEach((d) => {
+        if (!state.templates.some((t) => t.key === d.key)) {
+          state.templates.push({ ...d, updatedAt: '', updatedBy: '' })
+        }
+      })
     }
   } catch (e) {
     console.error('[hydrate] 数据损坏，回退到种子数据', e)

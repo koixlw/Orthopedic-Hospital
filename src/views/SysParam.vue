@@ -39,6 +39,12 @@
         <el-form-item label="术前禁食提示语">
           <el-input v-model="form.fastingTip" type="textarea" :rows="3" maxlength="200" show-word-limit style="width:100%" />
         </el-form-item>
+        <el-form-item label="短信正文模板">
+          <div class="tpl-link-row">
+            <span class="tiny">「预约成功」「入院前提醒」的短信正文在「消息通知」页维护，支持变量占位与实时预览，保存后即生效</span>
+            <el-button link type="primary" @click="goTpl">前往模板配置 →</el-button>
+          </div>
+        </el-form-item>
       </el-form>
 
       <div class="divider-h"></div>
@@ -102,12 +108,14 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { can, ROLES } from '@/store/session'
 import { permsOf, PAGE_LABEL } from '@/utils/guard'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { state } from '@/store/db'
 import * as settings from '@/store/settings'
 
+const router = useRouter()
 const form = reactive({ ...state.settings })
 const lastSaved = ref('本次会话未保存')
 
@@ -133,6 +141,10 @@ const envRows = [
   { k: '版本', v: 'v1.4 Demo' }
 ]
 
+function goTpl() {
+  router.push('/msg')
+}
+
 function doSave() {
   const n = settings.save({ ...form })
   lastSaved.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
@@ -154,6 +166,8 @@ watch(() => state.settings, (v) => {
 </script>
 
 <style scoped>
+.tpl-link-row { display: flex; align-items: center; gap: 16px; width: 100%; }
+.tpl-link-row .tiny { flex: 1; line-height: 1.6; }
 .readonly-band { background: #f7f8fa; border: 1px solid #e8ebf0; border-radius: 8px; padding: 16px; }
 .flow-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .flow-line .node {

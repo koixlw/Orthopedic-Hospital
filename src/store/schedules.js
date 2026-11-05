@@ -174,25 +174,32 @@ export function create(form) {
   pushMessage({
     patientId: p.patientId,
     type: 'APPOINTMENT_SUCCESS',
+    tplKey: 'APPOINTMENT_SUCCESS',
     channel: '短信',
     status: auto ? 'SENT' : 'PENDING',
     planSendTime: fmtTime(new Date()),
     trigger: '创建手术预约 ' + rec.scheduleId,
-    content: '【日间手术中心】' + p.name + '您好，您的手术已预约成功：' +
-      fmtDate(rec.surgeryDate) + '（' + weekText(rec.surgeryDate) + '）' + rec.room + ' 第 ' + rec.seq +
-      ' 台，主刀 ' + rec.surgeon + '。请于当日 07:30 前到日间手术中心报到，' +
-      (state.settings.fastingTip || '术前 8 小时禁食。') + '如需改期请联系 028-8888 6120。'
+    vars: {
+      手术日期: fmtDate(rec.surgeryDate), 星期: weekText(rec.surgeryDate),
+      手术间: rec.room, 台次: rec.seq, 主刀: rec.surgeon,
+      麻醉方式: rec.anesthesiaType, 科室: p.dept, 住院号: p.inpatientNo,
+      禁食提示: state.settings.fastingTip || '术前 8 小时禁食、4 小时禁饮。'
+    }
   })
   pushMessage({
     patientId: p.patientId,
     type: 'PRE_ADMISSION',
+    tplKey: 'PRE_ADMISSION',
     channel: '短信',
     status: 'PENDING',
     planSendTime: planTimeOf(rec.surgeryDate),
     trigger: '入院前提醒（提前 ' + noticeDays() + ' 天）',
-    content: '【日间手术中心】' + p.name + '您好，您预约的手术时间为' + fmtDate(rec.surgeryDate) +
-      '，请于当日上午 07:30 前到日间手术中心办理入院，携带身份证、医保卡及住院证。' +
-      (state.settings.fastingTip || '')
+    vars: {
+      手术日期: fmtDate(rec.surgeryDate), 星期: weekText(rec.surgeryDate),
+      手术间: rec.room, 台次: rec.seq, 主刀: rec.surgeon,
+      麻醉方式: rec.anesthesiaType, 科室: p.dept, 住院号: p.inpatientNo,
+      禁食提示: state.settings.fastingTip || '术前 8 小时禁食、4 小时禁饮。'
+    }
   })
 
   log({
@@ -253,14 +260,19 @@ export function adjust(scheduleId, form, reason, channel) {
     pushMessage({
       patientId: rec.patientId,
       type: 'SCHEDULE_CHANGE',
+      tplKey: 'SCHEDULE_CHANGE',
       channel: channel || state.settings.changeNoticeChannel || 'BOTH',
       status: 'SENT',
       planSendTime: fmtTime(new Date()),
       trigger: '调整手术安排 ' + rec.scheduleId,
-      content: '【日间手术中心】' + (p ? p.name : '') + '您好，您的手术时间已调整：原定 ' +
-        fmtDate(rec.bookedDate) + '（' + weekText(rec.bookedDate) + '）' + rec.bookedRoom + ' 第 ' + rec.bookedSeq +
-        ' 台，调整为 ' + fmtDate(rec.surgeryDate) + '（' + weekText(rec.surgeryDate) + '）' + rec.room + ' 第 ' + rec.seq +
-        ' 台，请按新时间到院，' + (state.settings.fastingTip || '术前 8 小时禁食。')
+      vars: {
+        患者姓名: p ? p.name : '',
+        原日期: fmtDate(rec.bookedDate), 原手术间: rec.bookedRoom, 原台次: rec.bookedSeq,
+        手术日期: fmtDate(rec.surgeryDate), 星期: weekText(rec.surgeryDate),
+        手术间: rec.room, 台次: rec.seq, 主刀: rec.surgeon,
+        麻醉方式: rec.anesthesiaType, 科室: p ? p.dept : '',
+        禁食提示: state.settings.fastingTip || '术前 8 小时禁食、4 小时禁饮。'
+      }
     })
     // 未发送的入院前提醒按新日期重算（RULE-MSG-001）
     state.messages
