@@ -1,22 +1,34 @@
 <template>
   <header class="topbar">
-    <div>
-      <div class="page-title">{{ title }}</div>
-      <div class="crumb">日间手术中心 / {{ title }}</div>
+    <!-- 左：院徽 + 院名 -->
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div class="brand-text">
+        <div class="name">{{ HOSPITAL.name }}</div>
+        <div class="sub"><b>{{ HOSPITAL.systemMain }}</b><span>{{ HOSPITAL.systemTail }}</span></div>
+      </div>
     </div>
+
+    <!-- 中：一级业务模块 -->
+    <nav class="top-nav">
+      <router-link
+        v-for="m in MODULES"
+        :key="m.key"
+        :to="m.to"
+        class="top-tab"
+        :class="{ on: m.key === activeModule }"
+      >{{ m.label }}</router-link>
+    </nav>
+
     <div class="spacer"></div>
 
-    <div class="dept">
-      <el-icon><OfficeBuilding /></el-icon>
-      日间手术中心
-    </div>
+    <!-- 右：业务日期 / 岗位切换 / 当前用户 -->
+    <div class="top-date">业务日期 <b>{{ today }}</b></div>
+    <div class="top-divider"></div>
 
     <el-dropdown trigger="click" @command="onRole">
-      <div class="user-trigger">
-        <el-avatar :size="24" style="background:#2b6cb0;font-size:12px">{{ state.session.name.slice(0, 1) }}</el-avatar>
-        <div>
-          <div class="who">{{ state.session.name }} <span class="role">· {{ state.session.roleLabel }}</span></div>
-        </div>
+      <div class="role-pill">
+        <span>日间手术中心 · {{ state.session.roleLabel }}</span>
         <el-icon :size="12" color="#8a94a6"><ArrowDown /></el-icon>
       </div>
       <template #dropdown>
@@ -32,28 +44,29 @@
       </template>
     </el-dropdown>
 
-    <div class="clock">{{ clock }}</div>
+    <div class="top-divider"></div>
+
+    <div class="top-user">
+      <el-avatar :size="26" style="background:#2b6cb0;font-size:12px">{{ state.session.name.slice(0, 1) }}</el-avatar>
+      <span class="who">{{ state.session.name }}</span>
+    </div>
+
     <div class="demo-pill">演示环境</div>
   </header>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import dayjs from 'dayjs'
 import { ElMessage } from 'element-plus'
 import { state } from '@/store/db'
 import { ROLES, switchRole } from '@/store/session'
-import { fmtTime } from '@/utils/format'
+import { HOSPITAL, MODULES, moduleOf } from './nav'
 
 const route = useRoute()
-const title = computed(() => route.meta?.title || '工作台')
-const clock = ref(fmtTime(new Date()))
-let timer = null
-
-onMounted(() => {
-  timer = setInterval(() => { clock.value = fmtTime(new Date()) }, 1000)
-})
-onUnmounted(() => clearInterval(timer))
+const activeModule = computed(() => moduleOf(route.path))
+const today = dayjs().format('YYYY-MM-DD')
 
 function onRole(key) {
   if (key === state.session.role) return
