@@ -1,6 +1,7 @@
 // OBJ-CHG-001 / 002 手术费用单与费用明细（3.7 / 3.8）
 // ▲招标第 12 项：手工补录 + 常用组套调入两条路径
 // 零物理删除（RULE-COM-001）：草稿行「移除」软删可恢复，已提交单「作废」永久保留
+import { assertCan } from '@/utils/guard'
 import { state, persist } from './db'
 import { log } from './logs'
 import { get as getPatient } from './patients'
@@ -82,6 +83,7 @@ function nextLineId(sheet) {
 
 /* ---------------- FUNC-CHG-001 手工补录 ---------------- */
 export function addLine(patientId, item, qty = 1) {
+  assertCan('chg.add', { module: 'CHG', page: '手术费用', action: 'CREATE', label: '录入手术费用', targetType: '费用明细' })
   if (!item) throw new Error('请选择收费项目')
   const sheet = ensureDraft(patientId)
   assertDraft(sheet)
@@ -117,6 +119,7 @@ export function addLine(patientId, item, qty = 1) {
 
 /* ---------------- FUNC-CHG-002 常用组套调入 ---------------- */
 export function importGroup(patientId, group) {
+  assertCan('chg.import', { module: 'CHG', page: '手术费用', action: 'CREATE', label: '调入费用组套', targetType: '费用明细' })
   if (!group) throw new Error('请选择费用组套')
   const sheet = ensureDraft(patientId)
   assertDraft(sheet)
@@ -188,6 +191,7 @@ export function patchLine(patientId, lineId, patch = {}) {
 
 /* ---------------- FUNC-CHG-005 移除明细（软删可恢复） ---------------- */
 export function removeLine(patientId, lineId, reason = '') {
+  assertCan('chg.add', { module: 'CHG', page: '手术费用', action: 'REMOVE', label: '移除费用明细', targetType: '费用明细' })
   const sheet = active(patientId)
   assertDraft(sheet)
   const line = sheet.lines.find((l) => l.chargeItemId === lineId)
@@ -211,6 +215,7 @@ export function removeLine(patientId, lineId, reason = '') {
 }
 
 export function restoreLine(patientId, lineId) {
+  assertCan('chg.add', { module: 'CHG', page: '手术费用', action: 'UPDATE', label: '恢复费用明细', targetType: '费用明细' })
   const sheet = active(patientId)
   assertDraft(sheet)
   const line = sheet.lines.find((l) => l.chargeItemId === lineId)
@@ -235,6 +240,7 @@ export function restoreLine(patientId, lineId) {
 
 /* ---------------- FUNC-CHG-003 提交手术费用 ---------------- */
 export function submit(patientId) {
+  assertCan('chg.submit', { module: 'CHG', page: '手术费用', action: 'UPDATE', label: '提交费用单', targetType: '费用单' })
   const sheet = active(patientId)
   if (!sheet) throw new Error('该患者还没有费用草稿')
   const lines = sheet.lines.filter((l) => !l.removed)
@@ -258,6 +264,7 @@ export function submit(patientId) {
 
 /* ---------------- FUNC-CHG-006 作废已提交费用单 ---------------- */
 export function voidCharge(chargeId, reason) {
+  assertCan('chg.void', { module: 'CHG', page: '手术费用', action: 'VOID', label: '作废费用单', targetType: '费用单' })
   const sheet = getSheet(chargeId)
   if (!sheet) throw new Error('未找到该费用单')
   if (sheet.status === 'VOIDED') throw new Error('该费用单已作废，不能重复作废')
@@ -280,6 +287,7 @@ export function voidCharge(chargeId, reason) {
 
 /** FUNC-CHG-007 基于已作废单重新录入（生成新草稿，原单永久保留） */
 export function reEnter(chargeId) {
+  assertCan('chg.reenter', { module: 'CHG', page: '手术费用', action: 'CREATE', label: '重新录入费用', targetType: '费用单' })
   const src = getSheet(chargeId)
   if (!src) throw new Error('未找到该费用单')
   if (src.status !== 'VOIDED') throw new Error('只有已作废的费用单可以重新录入')

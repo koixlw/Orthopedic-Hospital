@@ -66,8 +66,35 @@
       </el-table>
 
       <div class="flex gap8 mt12" style="justify-content:flex-end">
-        <el-button @click="doRestore">恢复默认</el-button>
-        <el-button type="primary" :disabled="!dirty" @click="doSave">保存</el-button>
+        <el-button v-if="can('param.save')" @click="doRestore">恢复默认</el-button>
+        <el-button v-if="can('param.save')" type="primary" :disabled="!dirty" @click="doSave">保存</el-button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">角色与权限</div>
+        <div class="card-sub">无权限的菜单与按钮一律隐藏，不置灰；动作入口另有服务端二次校验</div>
+        <div class="right">
+          <el-tag size="small" type="info">当前登录：{{ state.session.roleLabel }}</el-tag>
+        </div>
+      </div>
+
+      <el-table :data="roleRows" size="small" border>
+        <el-table-column prop="role" label="角色" width="212" />
+        <el-table-column prop="duty" label="岗位职责" width="300" />
+        <el-table-column prop="menus" label="可见菜单" />
+        <el-table-column label="权限范围" width="120" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.all" size="small" type="warning">全部</el-tag>
+            <el-tag v-else size="small" type="info">{{ row.count }} 项</el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="notice-bar mt12">
+        <el-icon><InfoFilled /></el-icon>
+        演示环境的管理员角色拥有全部操作权限，便于完整走通流程；正式系统按岗位分离，登录后仅可见本岗位菜单与按钮。
       </div>
     </div>
   </div>
@@ -75,6 +102,8 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { can, ROLES } from '@/store/session'
+import { permsOf, PAGE_LABEL } from '@/utils/guard'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { state } from '@/store/db'
 import * as settings from '@/store/settings'
@@ -83,6 +112,18 @@ const form = reactive({ ...state.settings })
 const lastSaved = ref('本次会话未保存')
 
 const dirty = computed(() => Object.keys(form).some((k) => String(form[k]) !== String(state.settings[k])))
+
+const roleRows = computed(() => ROLES.map((r) => {
+  const ps = permsOf(r.key)
+  const menus = ps.filter((c) => PAGE_LABEL[c]).map((c) => PAGE_LABEL[c])
+  return {
+    role: `${r.title}（${r.name}）`,
+    duty: r.duty,
+    menus: menus.length ? menus.join('、') : '全部菜单',
+    count: menus.length,
+    all: r.key === 'ADMIN'
+  }
+}))
 
 const envRows = [
   { k: '数据存储', v: '浏览器 localStorage（演示沙箱）' },

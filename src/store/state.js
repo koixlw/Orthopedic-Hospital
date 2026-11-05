@@ -9,7 +9,8 @@ import {
 
 export const STORAGE_KEY = 'PREOP_DEMO_V2'
 export const LOG_MAX = 2000
-export const DEFAULT_SESSION = { role: 'NURSE', name: '陈静', roleLabel: '护士' }
+// 默认登录为演示管理员：拥有全部权限，打开即进主界面（4.1 演示默认角色）
+export const DEFAULT_SESSION = { role: 'ADMIN', name: '李伟', roleLabel: '系统管理员', account: 'A0001', loggedIn: true, loginAt: '' }
 
 function emptyState() {
   return {
@@ -97,6 +98,7 @@ export function hydrate() {
       state.logs = { list: logs, seq: logs.length, overflow: false }
     }
     if (!state.session || !state.session.role) state.session = { ...DEFAULT_SESSION }
+    if (state.session.loggedIn === undefined) state.session.loggedIn = true
     if (!state.settings || !state.settings.updatedAt) {
       state.settings = { ...seedSettings(), ...(state.settings || {}) }
     }

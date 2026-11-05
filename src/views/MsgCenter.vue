@@ -63,7 +63,7 @@
         </el-table-column>
         <el-table-column label="操作" width="92" align="center">
           <template #default="{ row }">
-            <el-button v-if="row.status === 'FAILED'" link type="danger" size="small" @click="doResend(row)">重发</el-button>
+            <el-button v-if="row.status === 'FAILED' && can('msg.resend')" link type="danger" size="small" @click="doResend(row)">重发</el-button>
             <span v-else class="tiny">—</span>
           </template>
         </el-table-column>
@@ -98,6 +98,7 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
+import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, RefreshLeft } from '@element-plus/icons-vue'
 import { get as getPatient } from '@/store/patients'

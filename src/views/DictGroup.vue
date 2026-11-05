@@ -15,8 +15,8 @@
       <div class="card-head">
         <div class="card-title">{{ current.name }}</div>
         <div class="right">
-          <el-button size="small" @click="openPick">从收费项目添加</el-button>
-          <el-button size="small" @click="addBlank">手工添加一行</el-button>
+          <el-button v-if="can('dict.edit')" size="small" @click="openPick">从收费项目添加</el-button>
+          <el-button v-if="can('dict.edit')" size="small" @click="addBlank">手工添加一行</el-button>
         </div>
       </div>
 
@@ -46,7 +46,7 @@
         </el-table-column>
         <el-table-column label="操作" width="80" align="center">
           <template #default="{ $index }">
-            <el-button link type="danger" size="small" @click="removeLine($index)">移除</el-button>
+            <el-button v-if="can('dict.edit')" link type="danger" size="small" @click="removeLine($index)">移除</el-button>
           </template>
         </el-table-column>
         <template #empty><div class="empty">该组套暂无明细</div></template>
@@ -59,8 +59,8 @@
           <span class="muted" style="margin-left:8px">共 {{ lines.length }} 项</span>
         </div>
         <div class="flex gap8">
-          <el-button @click="doToggle">{{ current.enabled ? '停用组套' : '启用组套' }}</el-button>
-          <el-button type="primary" @click="doSave">保存组套</el-button>
+          <el-button v-if="can('dict.toggle')" @click="doToggle">{{ current.enabled ? '停用组套' : '启用组套' }}</el-button>
+          <el-button v-if="can('dict.edit')" type="primary" @click="doSave">保存组套</el-button>
         </div>
       </div>
       <div class="notice-bar mt12">
@@ -90,6 +90,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { can } from '@/store/session'
 import { ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import { fmtAmount, round2 } from '@/utils/format'

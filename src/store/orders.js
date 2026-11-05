@@ -1,6 +1,7 @@
 // OBJ-ORD-001 手术医嘱（3.10）
 // ▲招标第 13 项：补录手术医嘱，至少包含手术过程中使用到的麻醉药
 // isAnesthetic 由药品字典推导（RULE-ORD-002），页面不填写
+import { assertCan } from '@/utils/guard'
 import { state, persist } from './db'
 import { log } from './logs'
 import { get as getPatient } from './patients'
@@ -27,6 +28,7 @@ function nextOrderId() {
 
 /* ---------------- FUNC-ORD-001 录入手术医嘱 ---------------- */
 export function add(patientId, form = {}) {
+  assertCan('ord.add', { module: 'ORD', page: '手术医嘱', action: 'CREATE', label: '录入手术医嘱', targetType: '医嘱' })
   const drug = state.dicts.drugs.find((d) => d.code === form.drugCode)
   if (!drug) throw new Error('请选择药品')
   if (!drug.enabled) throw new Error('该药品已停用，不能开立医嘱')
@@ -75,6 +77,7 @@ export function add(patientId, form = {}) {
 
 /* ---------------- FUNC-ORD-003 修改医嘱 ---------------- */
 export function patch(orderId, body = {}, reason = '') {
+  assertCan('ord.add', { module: 'ORD', page: '手术医嘱', action: 'UPDATE', label: '修改医嘱', targetType: '医嘱' })
   const o = get(orderId)
   if (!o) throw new Error('未找到该医嘱')
   if (o.removed) throw new Error('已移除的医嘱不能修改，请先恢复')
@@ -100,6 +103,7 @@ export function patch(orderId, body = {}, reason = '') {
 
 /* ---------------- FUNC-ORD-004 移除医嘱（软删可恢复） ---------------- */
 export function remove(orderId, reason = '') {
+  assertCan('ord.remove', { module: 'ORD', page: '手术医嘱', action: 'REMOVE', label: '移除医嘱', targetType: '医嘱' })
   const o = get(orderId)
   if (!o) throw new Error('未找到该医嘱')
   if (o.removed) throw new Error('该医嘱已移除，不能重复移除')
@@ -120,6 +124,7 @@ export function remove(orderId, reason = '') {
 }
 
 export function restore(orderId) {
+  assertCan('ord.add', { module: 'ORD', page: '手术医嘱', action: 'UPDATE', label: '恢复医嘱', targetType: '医嘱' })
   const o = get(orderId)
   if (!o) throw new Error('未找到该医嘱')
   if (!o.removed) throw new Error('该医嘱未被移除，无需恢复')
@@ -140,6 +145,7 @@ export function restore(orderId) {
 
 /* ---------------- FUNC-ORD-005 停止长期医嘱 ---------------- */
 export function stop(orderId, reason) {
+  assertCan('ord.stop', { module: 'ORD', page: '手术医嘱', action: 'UPDATE', label: '停止医嘱', targetType: '医嘱' })
   const o = get(orderId)
   if (!o) throw new Error('未找到该医嘱')
   if (o.type !== '长期') throw new Error('只有长期医嘱可以停嘱')
@@ -162,6 +168,7 @@ export function stop(orderId, reason) {
 
 /** 已执行医嘱只能作废（保留记录，不删） */
 export function voidOrder(orderId, reason) {
+  assertCan('ord.void', { module: 'ORD', page: '手术医嘱', action: 'VOID', label: '作废医嘱', targetType: '医嘱' })
   const o = get(orderId)
   if (!o) throw new Error('未找到该医嘱')
   if (o.execStatus === '已作废') throw new Error('该医嘱已作废，不能重复作废')

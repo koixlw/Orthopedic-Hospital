@@ -71,7 +71,7 @@
         </div>
         <div class="fld" style="width:96px">
           <div class="lb">&nbsp;</div>
-          <el-button type="primary" style="width:100%" @click="doAdd">添加医嘱</el-button>
+          <el-button v-if="can('ord.add')" type="primary" style="width:100%" @click="doAdd">添加医嘱</el-button>
         </div>
       </div>
 
@@ -131,14 +131,14 @@
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <template v-if="row.execStatus === '执行中' && !row.removed">
-              <el-button link type="primary" size="small" @click="openEdit(row)">修改</el-button>
-              <el-button v-if="row.type === '长期'" link type="warning" size="small" @click="openStop(row)">停嘱</el-button>
-              <el-button link type="danger" size="small" @click="doRemove(row)">移除</el-button>
+              <el-button v-if="can('ord.add')" link type="primary" size="small" @click="openEdit(row)">修改</el-button>
+              <el-button v-if="row.type === '长期' && can('ord.stop')" link type="warning" size="small" @click="openStop(row)">停嘱</el-button>
+              <el-button v-if="can('ord.remove')" link type="danger" size="small" @click="doRemove(row)">移除</el-button>
             </template>
             <template v-else-if="row.execStatus === '已执行'">
-              <el-button link type="danger" size="small" @click="openVoid(row)">作废</el-button>
+              <el-button v-if="can('ord.void')" link type="danger" size="small" @click="openVoid(row)">作废</el-button>
             </template>
-            <el-button v-else-if="row.removed" link type="primary" size="small" @click="doRestore(row)">恢复</el-button>
+            <el-button v-else-if="row.removed && can('ord.add')" link type="primary" size="small" @click="doRestore(row)">恢复</el-button>
             <span v-else class="tiny">—</span>
           </template>
         </el-table-column>
@@ -212,6 +212,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'

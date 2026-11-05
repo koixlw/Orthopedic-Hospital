@@ -10,7 +10,7 @@
         <div class="card-title">手术申请单</div>
         <div class="card-sub">接收 HIS 申请单 → 抗凝剂停药校验 → 建档进入术前流程</div>
         <div class="right">
-          <el-button type="primary" :icon="Download" :loading="loading" @click="openReceive">接收 HIS 申请单</el-button>
+          <el-button v-if="can('apply.receive')" type="primary" :icon="Download" :loading="loading" @click="openReceive">接收 HIS 申请单</el-button>
         </div>
       </div>
 
@@ -69,11 +69,11 @@
             <template v-if="row.status === 'PENDING'">
               <el-tooltip :disabled="canApply(row)" content="口服抗凝剂需停药满 7 天" placement="top">
                 <span>
-                  <el-button link type="primary" size="small" :disabled="!canApply(row)" @click="openBuild(row)">建档</el-button>
+                  <el-button v-if="can('apply.build')" link type="primary" size="small" :disabled="!canApply(row)" @click="openBuild(row)">建档</el-button>
                 </span>
               </el-tooltip>
-              <el-button link type="primary" size="small" @click="openCorrect(row)">修正</el-button>
-              <el-button link type="danger" size="small" @click="openReturn(row)">退回</el-button>
+              <el-button v-if="can('apply.correct')" link type="primary" size="small" @click="openCorrect(row)">修正</el-button>
+              <el-button v-if="can('apply.return')" link type="danger" size="small" @click="openReturn(row)">退回</el-button>
             </template>
             <el-button v-else-if="row.status === 'ARCHIVED'" link type="primary" size="small" @click="goPatient(row)">查看患者</el-button>
             <el-button v-else link type="info" size="small" @click="viewReturn(row)">查看</el-button>
@@ -234,6 +234,7 @@
 <script setup>
 import { computed, reactive, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Search } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'

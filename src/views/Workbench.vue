@@ -36,7 +36,7 @@
         <div class="card-title">手术患者集中管理</div>
         <div class="card-sub">按手术安排状态检索，操作列随患者状态变化</div>
         <div class="right">
-          <el-button type="primary" :icon="DocumentAdd" @click="go('/apply')">接收 HIS 申请单</el-button>
+          <el-button v-if="can('apply.receive')" type="primary" :icon="DocumentAdd" @click="go('/apply')">接收 HIS 申请单</el-button>
           <el-button :icon="Download" @click="onExport">导出当前列表</el-button>
         </div>
       </div>
@@ -131,22 +131,22 @@
           <el-table-column label="操作" min-width="240" fixed="right">
             <template #default="{ row }">
               <div class="flex gap6" style="flex-wrap:wrap">
-                <el-button v-if="row.status === 'APPLIED'" link type="primary" size="small" @click="go('/apply')">建档</el-button>
+                <el-button v-if="row.status === 'APPLIED' && can('apply.build')" link type="primary" size="small" @click="go('/apply')">建档</el-button>
 
                 <template v-if="row.status === 'DAY_SURGERY'">
                   <el-button v-if="row.evalStatus.specialist === 'FAILED'" link type="info" size="small"
                     @click="go('/evaluation/' + row.patientId)">查看评估</el-button>
-                  <el-button v-else-if="row.evalStatus.specialist === 'PENDING'" link type="primary" size="small"
+                  <el-button v-else-if="row.evalStatus.specialist === 'PENDING' && can('evaluate')" link type="primary" size="small"
                     @click="go('/evaluation/' + row.patientId)">评估</el-button>
-                  <el-button v-if="canSchedule(row) && can('schedule')" link type="primary" size="small"
+                  <el-button v-if="canSchedule(row) && can('sch.create')" link type="primary" size="small"
                     @click="go('/schedule?patient=' + row.patientId)">创建预约</el-button>
-                  <el-button link type="primary" size="small" @click="go('/deposit/' + row.patientId)">储值金</el-button>
-                  <el-button link type="danger" size="small" @click="openWithdraw(row)">退出</el-button>
+                  <el-button v-if="can('deposit')" link type="primary" size="small" @click="go('/deposit/' + row.patientId)">储值金</el-button>
+                  <el-button v-if="can('dep.withdraw')" link type="danger" size="small" @click="openWithdraw(row)">退出</el-button>
                 </template>
 
                 <template v-if="row.status === 'SCHEDULED'">
-                  <el-button link type="primary" size="small" @click="go('/admission/' + row.patientId)">入院登记</el-button>
-                  <el-button link type="primary" size="small" @click="go('/schedule?patient=' + row.patientId)">调整安排</el-button>
+                  <el-button v-if="can('admission')" link type="primary" size="small" @click="go('/admission/' + row.patientId)">入院登记</el-button>
+                  <el-button v-if="can('sch.adjust')" link type="primary" size="small" @click="go('/schedule?patient=' + row.patientId)">调整安排</el-button>
                   <el-button link type="info" size="small" @click="go('/trace/' + row.patientId)">查看排程</el-button>
                 </template>
 
@@ -232,7 +232,7 @@
         <div class="card-head">
           <div class="card-title">今日手术排台</div>
           <div class="card-sub">按台次排序，与「手术排程」日视图同源</div>
-          <div class="right"><el-button text size="small" @click="go('/schedule')">进入排程</el-button></div>
+          <div v-if="can('schedule')" class="right"><el-button text size="small" @click="go('/schedule')">进入排程</el-button></div>
         </div>
         <el-table :data="todayBoard" size="small" border style="width:100%">
           <el-table-column label="台次 · 手术间" width="140">
@@ -263,7 +263,7 @@
         <div class="card-head">
           <div class="card-title">最近操作</div>
           <div class="card-sub">全站留痕，只追加不可修改</div>
-          <div class="right"><el-button text size="small" @click="go('/log')">全部日志</el-button></div>
+          <div v-if="can('log')" class="right"><el-button text size="small" @click="go('/log')">全部日志</el-button></div>
         </div>
         <el-table :data="recentLogs" size="small" border style="width:100%">
           <el-table-column label="时间" width="126">

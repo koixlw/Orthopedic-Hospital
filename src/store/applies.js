@@ -2,6 +2,7 @@
 // 申请单只能从 HIS 接收，本系统不生产（6.12 禁用项）；患者只能由申请单建档产生
 import { computed } from 'vue'
 import dayjs from 'dayjs'
+import { assertCan } from '@/utils/guard'
 import { state, persist } from './db'
 import { log } from './logs'
 import { fmtTime } from '@/utils/format'
@@ -65,6 +66,7 @@ function nextApplyId() {
 
 /** FUNC-APL-001 接收 HIS 申请单（一次操作可多条，逐条留痕） */
 export function receive(poolItems) {
+  assertCan('apply.receive', { module: 'APL', page: '日间手术申请', action: 'CREATE', label: '接收申请单', targetType: '申请单' })
   const items = poolItems || []
   if (!items.length) throw new Error('请至少选择一条申请单')
   items.forEach((item) => {
@@ -122,6 +124,7 @@ export function receive(poolItems) {
 
 /** FUNC-APL-002 修正申请单信息（已建档只允许改拟手术日与主刀） */
 export function correct(applyId, patch, reason = '') {
+  assertCan('apply.correct', { module: 'APL', page: '日间手术申请', action: 'UPDATE', label: '更正申请单', targetType: '申请单' })
   const apply = get(applyId)
   if (!apply) throw new Error('未找到该申请单')
   if (apply.status === 'VOIDED') throw new Error('该申请单已退回，不能修正')
@@ -146,6 +149,7 @@ export function correct(applyId, patch, reason = '') {
 
 /** FUNC-APL-003 退回申请单（软作废，不删记录） */
 export function returnApply(applyId, reason, note = '') {
+  assertCan('apply.return', { module: 'APL', page: '日间手术申请', action: 'UPDATE', label: '退回申请单', targetType: '申请单' })
   const apply = get(applyId)
   if (!apply) throw new Error('未找到该申请单')
   if (apply.status === 'ARCHIVED') throw new Error('该申请单已建档，不能退回；如需终止请办理退出日间手术')
@@ -170,6 +174,7 @@ export function returnApply(applyId, reason, note = '') {
  * 基本信息、住院号、术式、拟手术日、主刀由申请单带出，建档页面不可修改
  */
 export function buildPatient(applyId, extra = {}) {
+  assertCan('apply.build', { module: 'APL', page: '日间手术申请', action: 'CREATE', label: '为申请单建档', targetType: '申请单' })
   const apply = get(applyId)
   if (!apply) throw new Error('未找到该申请单')
   if (apply.status !== 'PENDING') throw new Error('该申请单状态不允许建档')

@@ -29,46 +29,46 @@ export const NAV_GROUPS = [
   {
     // 总览归属门诊业务（工作台是门诊侧的入口），保证任何页面都有一级模块高亮
     key: 'overview', title: '总览', module: 'clinic',
-    items: [{ label: '工作台', path: '/workbench', icon: 'Odometer' }]
+    items: [{ label: '工作台', path: '/workbench', perm: 'workbench', icon: 'Odometer' }]
   },
   {
     key: 'clinic', title: '门诊申请阶段', module: 'clinic',
     items: [
-      { label: '日间手术申请', path: '/apply', icon: 'DocumentAdd', badge: 'apply', hot: true },
-      { label: '术前评估', path: '/evaluation', icon: 'FirstAidKit', badge: 'eval' }
+      { label: '日间手术申请', path: '/apply', perm: 'apply', icon: 'DocumentAdd', badge: 'apply', hot: true },
+      { label: '术前评估', path: '/evaluation', perm: 'evaluate', icon: 'FirstAidKit', badge: 'eval' }
     ]
   },
   {
     key: 'ward', title: '住院环节', module: 'ward',
     items: [
-      { label: '储值金管理', path: '/deposit', icon: 'Wallet' },
-      { label: '入院登记', path: '/admission', icon: 'OfficeBuilding' },
-      { label: '手术报到', path: '/checkin', icon: 'Postcard', badge: 'checkin' },
-      { label: '转普通入院', path: '/transfer', icon: 'Right' }
+      { label: '储值金管理', path: '/deposit', perm: 'deposit', icon: 'Wallet' },
+      { label: '入院登记', path: '/admission', perm: 'admission', icon: 'OfficeBuilding' },
+      { label: '手术报到', path: '/checkin', perm: 'checkin', icon: 'Postcard', badge: 'checkin' },
+      { label: '转普通入院', path: '/transfer', perm: 'transfer', icon: 'Right' }
     ]
   },
   {
     key: 'surgery', title: '手术环节', module: 'surgery',
     items: [
-      { label: '手术排程', path: '/schedule', icon: 'Calendar' },
-      { label: '手术费用', path: '/charge', icon: 'Tickets' },
-      { label: '手术医嘱', path: '/order', icon: 'Memo' }
+      { label: '手术排程', path: '/schedule', perm: 'schedule', icon: 'Calendar' },
+      { label: '手术费用', path: '/charge', perm: 'charge', icon: 'Tickets' },
+      { label: '手术医嘱', path: '/order', perm: 'order', icon: 'Memo' }
     ]
   },
   {
     key: 'report', title: '管理与统计', module: 'report',
     items: [
-      { label: '患者轨迹', path: '/trace', icon: 'Position' },
-      { label: '操作日志', path: '/log', icon: 'List' },
-      { label: '消息通知', path: '/msg', icon: 'ChatDotSquare' }
+      { label: '患者轨迹', path: '/trace', perm: 'trace', icon: 'Position' },
+      { label: '操作日志', path: '/log', perm: 'log', icon: 'List' },
+      { label: '消息通知', path: '/msg', perm: 'message', icon: 'ChatDotSquare' }
     ]
   },
   {
     key: 'system', title: '系统设置', module: 'system',
     items: [
-      { label: '收费项目与药品', path: '/dict-item', icon: 'Files' },
-      { label: '费用常用组套', path: '/dict-group', icon: 'Collection' },
-      { label: '系统参数', path: '/param', icon: 'Setting' }
+      { label: '收费项目与药品', path: '/dict-item', perm: 'dict', icon: 'Files' },
+      { label: '费用常用组套', path: '/dict-group', perm: 'dict', icon: 'Collection' },
+      { label: '系统参数', path: '/param', perm: 'setting', icon: 'Setting' }
     ]
   }
 ]

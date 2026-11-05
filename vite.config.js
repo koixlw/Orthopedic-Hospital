@@ -9,5 +9,8 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
   },
-  server: { port: 5178 }
+  server: { 
+    port: 5178,
+    open:true
+   }
 })

@@ -1,5 +1,6 @@
 // OBJ-EVL-001 术前评估记录（3.15）
 // ▲招标第 9 项：专科 / 麻醉双评估，不通过必须选原因（RULE-EVL-002），ASA ≥ III 必填风险说明
+import { assertCan } from '@/utils/guard'
 import { state, persist } from './db'
 import { log } from './logs'
 import { get as getPatient } from './patients'
@@ -65,6 +66,7 @@ function assertConclusion(form) {
 
 /** 专科评估（FUNC-EVL-003） */
 export function submitSpecialist(patientId, form) {
+  assertCan('eval.submit', { module: 'EVL', page: '术前评估', action: 'CREATE', label: '提交评估结论', targetType: '评估记录' })
   const p = getPatient(patientId)
   if (!p) throw new Error('未找到该患者')
   if (latest(patientId, SPECIALIST)) throw new Error('该患者已有专科评估结论，如需修改请先撤销')
@@ -112,6 +114,7 @@ export function submitSpecialist(patientId, form) {
 
 /** 麻醉评估（FUNC-EVL-004） */
 export function submitAnesthesia(patientId, form) {
+  assertCan('eval.submit', { module: 'EVL', page: '术前评估', action: 'CREATE', label: '提交评估结论', targetType: '评估记录' })
   const p = getPatient(patientId)
   if (!p) throw new Error('未找到该患者')
   const sp = latest(patientId, SPECIALIST)
@@ -169,6 +172,7 @@ export function submitAnesthesia(patientId, form) {
 
 /** FUNC-EVL-005 撤销评估结论（软作废，历史保留） */
 export function revoke(patientId, type, reason) {
+  assertCan('eval.revoke', { module: 'EVL', page: '术前评估', action: 'CANCEL', label: '撤销评估结论', targetType: '评估记录' })
   if (!reason) throw new Error('请填写撤销原因')
   const rec = latest(patientId, type)
   if (!rec) throw new Error('未找到可撤销的' + (TYPE_LABEL[type] || '评估') + '记录')

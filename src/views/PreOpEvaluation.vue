@@ -132,9 +132,9 @@
             </el-form>
 
             <div class="flex gap8" style="justify-content:flex-end">
-              <el-button v-if="existing" type="warning" plain @click="openRevoke">撤销评估</el-button>
-              <el-button v-if="existing" @click="goDeposit">前往储值金管理</el-button>
-              <el-button v-if="!readonly" type="primary" :disabled="progress.done < progress.total" @click="submit">
+              <el-button v-if="existing && can('eval.revoke')" type="warning" plain @click="openRevoke">撤销评估</el-button>
+              <el-button v-if="existing && can('deposit')" @click="goDeposit">前往储值金管理</el-button>
+              <el-button v-if="!readonly && can('eval.submit')" type="primary" :disabled="progress.done < progress.total" @click="submit">
                 提交{{ isAnesthesia ? '麻醉' : '专科' }}评估
               </el-button>
             </div>
@@ -160,6 +160,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
 import { state } from '@/store/db'
@@ -203,7 +204,8 @@ const existing = computed(() => {
   const type = isAnesthesia.value ? 'ANESTHESIA' : 'SPECIALIST'
   return evalStore.latest(patient.value.patientId, type)
 })
-const readonly = computed(() => !!existing.value)
+// 已出结论 或 该岗位无评估权 → 表单只读（护士可查看报告，但不能改结论）
+const readonly = computed(() => !!existing.value || !can('eval.submit'))
 
 const progress = computed(() => ({
   total: exams.value.length || 4,

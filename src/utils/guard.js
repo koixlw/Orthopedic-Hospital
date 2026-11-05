@@ -1,5 +1,7 @@
 // 状态机拦截 + 前置校验 + 角色权限（5.3 / 5.9.3 / 4.2）
 import { fmtTime } from './format'
+import { state } from '@/store/state'
+import { log } from '@/store/logs'
 
 const ENDED = ['WITHDRAWN', 'DISCHARGED']
 
@@ -97,18 +99,97 @@ export function labelOf(status) {
   }[status] || status
 }
 
-/* ---------------- 角色权限（4.2：无权限一律隐藏，不置灰） ---------------- */
-const PERMISSIONS = {
-  ADMIN: ['workbench', 'apply', 'evaluate', 'schedule', 'deposit', 'admission', 'checkin',
-    'charge', 'order', 'transfer', 'dict', 'message', 'log', 'trace', 'setting'],
-  NURSE: ['workbench', 'apply', 'evaluate', 'schedule', 'deposit', 'admission', 'checkin',
-    'charge', 'order', 'transfer', 'message', 'trace'],
-  DOCTOR: ['workbench', 'evaluate', 'schedule', 'checkin', 'charge', 'order', 'transfer', 'trace'],
-  CASHIER: ['workbench', 'deposit', 'charge', 'message', 'trace']
+/* ---------------- 角色与权限（4.1 角色清单 / 4.2 四条实现约定） ---------------- */
+
+/** 页面级权限码：与路由 meta.perm、侧栏菜单一一对应 */
+export const PAGE_LABEL = {
+  workbench: '工作台', apply: '日间手术申请', evaluate: '术前评估', schedule: '手术排程',
+  deposit: '储值金管理', admission: '入院登记', checkin: '手术报到', charge: '手术费用',
+  order: '手术医嘱', transfer: '转普通入院', dict: '基础字典', message: '消息通知',
+  log: '操作日志', trace: '患者轨迹', setting: '系统参数'
+}
+
+/** 动作级权限码：用于失败日志里拼出可读原因，不写 permission denied */
+export const PERM_LABEL = {
+  ...PAGE_LABEL,
+  'apply.receive': '接收申请单', 'apply.build': '为申请单建档', 'apply.correct': '更正申请单', 'apply.return': '退回申请单',
+  'eval.submit': '提交评估结论', 'eval.revoke': '撤销评估结论',
+  'sch.create': '创建手术预约', 'sch.adjust': '调整手术安排', 'sch.cancel': '取消手术预约',
+  'dep.deposit': '办理储值金缴存', 'dep.freeze': '冻结储值金', 'dep.transfer': '转入住院储值金',
+  'dep.withdraw': '办理退出结算', 'dep.reverse': '冲正储值金流水',
+  'adm.confirm': '办理入院登记', 'adm.modify': '修改入院信息', 'adm.revoke': '撤销入院登记',
+  'chk.confirm': '确认手术报到', 'chk.cancel': '取消报到', 'chk.print': '打印知情同意书',
+  'chg.add': '录入手术费用', 'chg.import': '调入费用组套', 'chg.submit': '提交费用单',
+  'chg.void': '作废费用单', 'chg.reenter': '重新录入费用',
+  'ord.add': '录入手术医嘱', 'ord.stop': '停止医嘱', 'ord.void': '作废医嘱', 'ord.remove': '移除医嘱',
+  'trf.submit': '转普通住院', 'trf.revoke': '撤销转普通住院',
+  'dict.edit': '维护基础字典', 'dict.remove': '移除字典项', 'dict.toggle': '启停用字典项',
+  'msg.resend': '重发通知', 'param.save': '修改系统参数', 'sys.reset': '重置演示数据'
+}
+
+/**
+ * 角色 → 权限码。岗位职责取自 4.1：
+ * NURSE 入院登记 / 储值金冻结与转入 / 退出结算；CASHIER 缴存 / 冻结 / 门诊结算；
+ * DOCTOR 转普通住院 / 手术费用 / 手术医嘱（含专科与麻醉评估）；ADMIN 全部。
+ */
+const GRANTS = {
+  NURSE: [
+    'workbench', 'apply', 'evaluate', 'schedule', 'deposit', 'admission', 'checkin', 'message', 'trace',
+    'apply.receive', 'apply.build', 'apply.correct', 'apply.return',
+    'sch.create', 'sch.adjust', 'sch.cancel',
+    'dep.freeze', 'dep.transfer', 'dep.withdraw',
+    'adm.confirm', 'adm.modify', 'adm.revoke',
+    'chk.confirm', 'chk.cancel', 'chk.print',
+    'msg.resend'
+  ],
+  CASHIER: [
+    'workbench', 'deposit', 'trace',
+    'dep.deposit', 'dep.freeze', 'dep.withdraw', 'dep.reverse'
+  ],
+  DOCTOR: [
+    'workbench', 'evaluate', 'charge', 'order', 'transfer', 'trace',
+    'eval.submit', 'eval.revoke',
+    'chg.add', 'chg.import', 'chg.submit', 'chg.void', 'chg.reenter',
+    'ord.add', 'ord.stop', 'ord.void', 'ord.remove',
+    'trf.submit', 'trf.revoke'
+  ],
+  // 演示需要：管理员全绿，正式系统按岗位分离（README 与系统参数页均有说明）
+  ADMIN: ['*']
+}
+
+export const ALL_PERMS = Object.keys(PERM_LABEL)
+
+export function permsOf(role) {
+  const g = GRANTS[role] || []
+  return g.includes('*') ? ALL_PERMS : g
 }
 
 export function roleAllows(role, code) {
-  const list = PERMISSIONS[role] || PERMISSIONS.NURSE
   if (!code) return true
-  return list.includes(code)
+  const g = GRANTS[role] || []
+  return g.includes('*') || g.includes(code)
+}
+
+/**
+ * 接口层强制校验（4.2 约定 2）：前端隐藏不作为安全手段。
+ * 不通过 → 写一条 result=FAIL 的日志（原因可读）→ 抛出，由页面 catch 后提示。
+ */
+export function assertCan(code, ctx = {}) {
+  if (roleAllows(state.session.role, code)) return true
+  const what = ctx.label || PERM_LABEL[code] || '该操作'
+  const msg = `当前角色（${state.session.roleLabel}）无权执行${what}`
+  log({
+    module: ctx.module || 'SYS',
+    page: ctx.page || '',
+    // 被拦截的尝试统一记 DENY：动作=权限拦截，对象=试图执行的动作，原因=可读说明
+    action: 'DENY',
+    targetType: ctx.targetType || '权限',
+    targetId: ctx.targetId || code,
+    targetName: ctx.targetName || what,
+    patientId: ctx.patientId || null,
+    reason: ctx.reason || '该岗位未开放此操作入口，请求被接口层拦截',
+    result: 'FAIL',
+    failReason: msg
+  })
+  throw new Error(msg)
 }

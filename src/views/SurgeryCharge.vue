@@ -20,7 +20,7 @@
     <div v-if="voidedCurrent" class="notice-bar warn">
       <el-icon><Warning /></el-icon>
       费用单已于 {{ (currentDoc.voidedAt || '').slice(0, 16) }} 作废，原因：{{ currentDoc.voidReason }}。
-      <el-button link type="primary" style="margin-left:8px" @click="doReEnter">重新录入</el-button>
+      <el-button v-if="can('chg.reenter')" link type="primary" style="margin-left:8px" @click="doReEnter">重新录入</el-button>
     </div>
 
     <div class="card">
@@ -43,7 +43,7 @@
           <el-select v-model="groupId" placeholder="选择常用组套" style="width:400px">
             <el-option v-for="g in groups" :key="g.groupId" :label="`${g.name}（${g.lines.length} 项 · ¥${fmtAmount(g.total)}）`" :value="g.groupId" />
           </el-select>
-          <el-button type="primary" :disabled="!groupId" @click="doImport">调入</el-button>
+          <el-button v-if="can('chg.import')" type="primary" :disabled="!groupId" @click="doImport">调入</el-button>
           <span v-if="currentDoc?.groupName" class="muted">已调入：{{ currentDoc.groupName }}</span>
           <span class="muted" style="margin-left:auto">组套明细可在「费用常用组套」维护，调入后数量可改</span>
         </div>
@@ -53,7 +53,7 @@
             <el-option v-for="it in chargeItems" :key="it.code" :label="`${it.name}　${it.spec}　¥${fmtAmount(it.price)}`" :value="it.code" />
           </el-select>
           <el-input-number v-model="newQty" :min="1" size="default" style="width:110px" />
-          <el-button type="primary" :disabled="!newItemCode" @click="doAdd">添加一行</el-button>
+          <el-button v-if="can('chg.add')" type="primary" :disabled="!newItemCode" @click="doAdd">添加一行</el-button>
           <span class="muted" style="margin-left:auto">已录入 {{ activeLines.length }} 项</span>
         </div>
       </template>
@@ -89,8 +89,8 @@
         <el-table-column label="操作" width="120" align="center">
           <template #default="{ row }">
             <template v-if="!readonly">
-              <el-button v-if="!row.removed" link type="danger" size="small" @click="doRemove(row)">移除</el-button>
-              <el-button v-else link type="primary" size="small" @click="doRestore(row)">恢复</el-button>
+              <el-button v-if="!row.removed && can('chg.add')" link type="danger" size="small" @click="doRemove(row)">移除</el-button>
+              <el-button v-else-if="can('chg.add')" link type="primary" size="small" @click="doRestore(row)">恢复</el-button>
             </template>
             <span v-else class="tiny">—</span>
           </template>
@@ -106,9 +106,9 @@
         <div class="flex gap12">
           <span class="muted">合计金额</span>
           <span class="amount-big">¥{{ fmtAmount(activeTotal) }}</span>
-          <el-button v-if="!readonly" @click="doClear">清空</el-button>
-          <el-button v-if="!readonly" type="primary" :disabled="!activeLines.length" @click="doSubmit">提交费用</el-button>
-          <el-button v-if="readonly" type="warning" plain @click="openVoid">作废费用单</el-button>
+          <el-button v-if="!readonly && can('chg.add')" @click="doClear">清空</el-button>
+          <el-button v-if="!readonly && can('chg.submit')" type="primary" :disabled="!activeLines.length" @click="doSubmit">提交费用</el-button>
+          <el-button v-if="readonly && can('chg.void')" type="warning" plain @click="openVoid">作废费用单</el-button>
         </div>
       </div>
     </div>
@@ -154,6 +154,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { fmtAmount, round2 } from '@/utils/format'
 import { state } from '@/store/db'

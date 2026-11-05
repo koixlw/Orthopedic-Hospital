@@ -5,7 +5,7 @@ import { state, persist } from './db'
 import { log } from './logs'
 import { get as getPatient } from './patients'
 import { fmtAmount, fmtTime, round2 } from '@/utils/format'
-import { goStatus } from '@/utils/guard'
+import { goStatus, assertCan } from '@/utils/guard'
 import { ACCOUNT_STATUS, FLOW_TYPE } from '@/mock/dict'
 
 export { ACCOUNT_STATUS, FLOW_TYPE }
@@ -84,6 +84,7 @@ function nextSettleNo() {
 
 /* ---------------- FUNC-DEP-001 缴存 ---------------- */
 export function deposit(patientId, amount, payMethod = '现金') {
+  assertCan('dep.deposit', { module: 'DEP', page: '储值金管理', action: 'CREATE', label: '办理储值金缴存', targetType: '储值金账户' })
   const account = accountOf(patientId)
   if (!account) throw new Error('该患者尚未建立储值金账户')
   const amt = round2(Number(amount))
@@ -109,6 +110,7 @@ export function deposit(patientId, amount, payMethod = '现金') {
 
 /* ---------------- FUNC-DEP-002 冻结 ▲ ---------------- */
 export function freeze(patientId) {
+  assertCan('dep.freeze', { module: 'DEP', page: '储值金管理', action: 'UPDATE', label: '冻结储值金', targetType: '储值金账户' })
   const account = accountOf(patientId)
   if (!account) throw new Error('该患者尚未建立储值金账户')
   if (account.status === 'FROZEN') throw new Error('该账户储值金已冻结，不能重复冻结')
@@ -136,6 +138,7 @@ export function freeze(patientId) {
 
 /* ---------------- FUNC-DEP-003 转入住院储值金 ▲ ---------------- */
 export function transferIn(patientId) {
+  assertCan('dep.transfer', { module: 'DEP', page: '储值金管理', action: 'UPDATE', label: '转入住院储值金', targetType: '储值金账户' })
   const account = accountOf(patientId)
   if (!account) throw new Error('该患者尚未建立储值金账户')
   if (account.status !== 'FROZEN') throw new Error('储值金未冻结，无法转入住院储值金')
@@ -167,6 +170,7 @@ export function transferIn(patientId) {
 
 /* ---------------- FUNC-DEP-004 退出日间手术并门诊结算 ▲ ---------------- */
 export function withdraw(patientId, reason, note = '', chargedLines = DEFAULT_CHARGED) {
+  assertCan('dep.withdraw', { module: 'DEP', page: '储值金管理', action: 'UPDATE', label: '办理退出结算', targetType: '储值金账户' })
   const account = accountOf(patientId)
   if (!account) throw new Error('该患者尚未建立储值金账户')
   if (!reason) throw new Error('请选择退出原因')
@@ -252,6 +256,7 @@ export function withdraw(patientId, reason, note = '', chargedLines = DEFAULT_CH
 
 /* ---------------- FUNC-DEP-006 缴存记录冲正（红冲） ---------------- */
 export function reverseFlow(patientId, flowId, reason) {
+  assertCan('dep.reverse', { module: 'DEP', page: '储值金管理', action: 'REVERSE', label: '冲正储值金流水', targetType: '储值金流水' })
   const account = accountOf(patientId)
   if (!account) throw new Error('该患者尚未建立储值金账户')
   if (!reason) throw new Error('请选择冲正原因')

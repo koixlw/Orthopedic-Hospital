@@ -3,13 +3,13 @@ import { fmtTime } from './format'
 export const ACTION_LABEL = {
   CREATE: '新增', UPDATE: '修改', REMOVE: '移除', VOID: '作废', REVERSE: '冲正',
   CANCEL: '撤销', DISABLE: '停用', ENABLE: '启用', STATUS: '状态变更',
-  EXPORT: '导出', LOGIN: '角色切换'
+  EXPORT: '导出', LOGIN: '登录', LOGOUT: '退出登录', DENY: '权限拦截'
 }
 
 export const ACTION_TYPE = {
   CREATE: 'success', UPDATE: 'primary', REMOVE: 'warning', VOID: 'info',
   REVERSE: 'danger', CANCEL: 'warning', DISABLE: 'info', ENABLE: 'success',
-  STATUS: 'primary', EXPORT: 'primary', LOGIN: 'info'
+  STATUS: 'primary', EXPORT: 'primary', LOGIN: 'success', LOGOUT: 'info', DENY: 'danger'
 }
 
 export const MODULE_LABEL = {

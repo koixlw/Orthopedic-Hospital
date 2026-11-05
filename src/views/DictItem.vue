@@ -5,7 +5,7 @@
         <div class="card-title">基础数据维护</div>
         <div class="card-sub">收费项目与药品字典：停用项历史可见，新建不可选</div>
         <div class="right">
-          <el-button type="primary" :icon="Plus" @click="openAdd">新增{{ tab === 'item' ? '收费项目' : '药品' }}</el-button>
+          <el-button v-if="can('dict.edit')" type="primary" :icon="Plus" @click="openAdd">新增{{ tab === 'item' ? '收费项目' : '药品' }}</el-button>
         </div>
       </div>
 
@@ -46,13 +46,13 @@
         </el-table-column>
         <el-table-column label="操作" width="180" align="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button link :type="row.enabled ? 'warning' : 'success'" size="small" @click="doToggle(row)">
+            <el-button v-if="can('dict.edit')" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button v-if="can('dict.toggle')" link :type="row.enabled ? 'warning' : 'success'" size="small" @click="doToggle(row)">
               {{ row.enabled ? '停用' : '启用' }}
             </el-button>
             <el-tooltip :disabled="!itemReferenced(row.code)" content="该项目已被引用，只能停用">
               <span>
-                <el-button link type="danger" size="small" :disabled="itemReferenced(row.code)" @click="doRemove(row)">移除</el-button>
+                <el-button v-if="can('dict.remove')" link type="danger" size="small" :disabled="itemReferenced(row.code)" @click="doRemove(row)">移除</el-button>
               </span>
             </el-tooltip>
           </template>
@@ -89,7 +89,7 @@
             </el-button>
             <el-tooltip :disabled="!drugReferenced(row.code)" content="该药品已被医嘱引用，只能停用">
               <span>
-                <el-button link type="danger" size="small" :disabled="drugReferenced(row.code)" @click="doRemove(row)">移除</el-button>
+                <el-button v-if="can('dict.remove')" link type="danger" size="small" :disabled="drugReferenced(row.code)" @click="doRemove(row)">移除</el-button>
               </span>
             </el-tooltip>
           </template>
@@ -139,6 +139,7 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
+import { can } from '@/store/session'
 import { ElMessage } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { fmtAmount } from '@/utils/format'

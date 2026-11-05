@@ -1,6 +1,7 @@
 // OBJ-DIC-001 / 002 / 003 收费项目、药品、常用组套（3.11—3.13）
 // 字典项只停用与软移除，不物理删除（RULE-COM-001）
 import { computed } from 'vue'
+import { assertCan } from '@/utils/guard'
 import { state, persist } from './db'
 import { log } from './logs'
 import { round2 } from '@/utils/format'
@@ -39,6 +40,7 @@ export function drugReferenced(code) {
 }
 
 export function addItem(payload) {
+  assertCan('dict.edit', { module: 'DICT', page: '收费项目与药品', action: 'CREATE', label: '维护基础字典', targetType: '收费项目' })
   if (!payload.code || !payload.name) throw new Error('编码与名称为必填项')
   if (find('item', payload.code)) throw new Error('收费项目编码 ' + payload.code + ' 已存在')
   const item = {
@@ -64,6 +66,7 @@ export function addItem(payload) {
 }
 
 export function addDrug(payload) {
+  assertCan('dict.edit', { module: 'DICT', page: '收费项目与药品', action: 'CREATE', label: '维护基础字典', targetType: '药品' })
   if (!payload.code || !payload.name) throw new Error('编码与名称为必填项')
   if (find('drug', payload.code)) throw new Error('药品编码 ' + payload.code + ' 已存在')
   const drug = {
@@ -94,6 +97,7 @@ export function addDrug(payload) {
 
 /** 修改字典项（项目 / 药品通用） */
 export function patchDict(kind, code, patch, reason = '') {
+  assertCan('dict.edit', { module: 'DICT', page: '收费项目与药品', action: 'UPDATE', label: '维护基础字典', targetType: '字典项' })
   const row = find(kind, code)
   if (!row) throw new Error('未找到该' + (KIND_LABEL[kind] || '字典项'))
   const before = {}
@@ -115,6 +119,7 @@ export function patchDict(kind, code, patch, reason = '') {
 
 /** 启用 / 停用（不删记录，历史单据仍显示名称） */
 export function toggle(kind, code) {
+  assertCan('dict.toggle', { module: 'DICT', page: '收费项目与药品', action: 'DISABLE', label: '启停用字典项', targetType: '字典项' })
   const row = find(kind, code)
   if (!row) throw new Error('未找到该' + (KIND_LABEL[kind] || '字典项'))
   const before = { 状态: row.enabled ? '启用' : '停用' }
@@ -133,6 +138,7 @@ export function toggle(kind, code) {
 
 /** 软移除：仅允许移除未被引用的字典项 */
 export function removeItem(kind, code, reason = '') {
+  assertCan('dict.remove', { module: 'DICT', page: '收费项目与药品', action: 'REMOVE', label: '移除字典项', targetType: '字典项' })
   const row = find(kind, code)
   if (!row) throw new Error('未找到该' + (KIND_LABEL[kind] || '字典项'))
   if (row.removed) throw new Error('该字典项已移除，不能重复移除')
@@ -154,6 +160,7 @@ export function removeItem(kind, code, reason = '') {
 
 /* ---------------- 常用组套 ---------------- */
 export function saveGroup(groupId, payload) {
+  assertCan('dict.edit', { module: 'DICT', page: '收费项目与药品', action: 'UPDATE', label: '维护费用组套', targetType: '费用组套' })
   const g = state.dicts.groups.find((x) => x.groupId === groupId)
   if (!g) throw new Error('未找到该费用组套')
   if (!payload.name) throw new Error('请填写组套名称')

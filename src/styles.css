@@ -85,14 +85,18 @@ body {
 .top-date b { color: #34425c; font-weight: 600; margin-left: 5px; font-variant-numeric: tabular-nums; }
 .top-divider { width: 1px; height: 16px; background: var(--line); margin: 0 14px; flex: none; }
 
-/* 岗位选择：带边框胶囊，和参考图一致 */
+/* 当前岗位：带边框胶囊，只读展示（岗位由登录决定） */
 .role-pill {
   display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px;
-  border: 1px solid #dbe3ee; border-radius: 6px; background: #fff;
-  font-size: 12.5px; color: #3d4f68; cursor: pointer; white-space: nowrap;
-  transition: border-color .15s, color .15s;
+  border: 1px solid #dbe3ee; border-radius: 6px; background: #fbfcfe;
+  font-size: 12.5px; color: #3d4f68; white-space: nowrap;
 }
-.role-pill:hover { border-color: #b7cde4; color: var(--brand); }
+
+/* 用户下拉里的身份卡 */
+.who-card { padding: 10px 14px 8px; }
+.wc-name { font-size: 13px; font-weight: 600; color: #1f2937; }
+.wc-name span { font-size: 11.5px; color: #8a94a6; font-weight: 400; margin-left: 4px; }
+.wc-meta { font-size: 11px; color: #98a5b6; margin-top: 3px; }
 
 .top-user { display: flex; align-items: center; gap: 7px; flex: none; }
 .top-user .who { font-size: 12.5px; color: #34425c; white-space: nowrap; }
@@ -139,6 +143,10 @@ body {
   align-items: center; gap: 6px; color: #6b7d94; font-size: 11.5px; cursor: pointer; flex: none;
 }
 .side-foot:hover { color: #8fc2f0; }
+.side-role {
+  border-top: 1px solid rgba(255, 255, 255, .07); padding: 11px 16px; display: flex;
+  align-items: center; gap: 6px; color: #5f7188; font-size: 11px; line-height: 1.5; flex: none;
+}
 
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 

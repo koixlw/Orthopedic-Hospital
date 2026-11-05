@@ -17,9 +17,13 @@
       </template>
     </nav>
 
-    <div class="side-foot" @click="onReset">
+    <div v-if="can('sys.reset')" class="side-foot" @click="onReset">
       <el-icon><RefreshLeft /></el-icon>
       <span>演示数据 · 重置</span>
+    </div>
+    <div v-else class="side-role">
+      <el-icon><Lock /></el-icon>
+      <span>当前岗位仅显示有权限的菜单</span>
     </div>
   </aside>
 </template>
@@ -30,11 +34,15 @@ import { useRoute } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { state, resetAll } from '@/store/db'
 import { pendingSpecialist, pendingAnesthesia } from '@/store/evals'
+import { can } from '@/store/session'
 import { NAV_GROUPS } from './nav'
 
 const route = useRoute()
 
-const groups = NAV_GROUPS
+/** 按当前角色裁剪菜单：无权限的菜单不显示，整组为空时连分组标题一起隐藏 */
+const groups = computed(() => NAV_GROUPS
+  .map((g) => ({ ...g, items: g.items.filter((it) => can(it.perm)) }))
+  .filter((g) => g.items.length))
 
 const counts = computed(() => ({
   apply: state.applies.filter((a) => a.status === 'PENDING').length,

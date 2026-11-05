@@ -122,10 +122,10 @@
             </div>
             <div class="flex gap8 mt12" style="justify-content:flex-end">
               <el-button @click="reset">取消</el-button>
-              <el-button v-if="!alreadyAdmitted" type="primary" :disabled="!canAdmit" @click="doAdmit">确认入院登记</el-button>
+              <el-button v-if="!alreadyAdmitted && can('adm.confirm')" type="primary" :disabled="!canAdmit" @click="doAdmit">确认入院登记</el-button>
               <template v-else>
-                <el-button @click="editDlg = true">修改登记信息</el-button>
-                <el-button type="danger" plain @click="doCancelAdmission">撤销入院登记</el-button>
+                <el-button v-if="can('adm.modify')" @click="editDlg = true">修改登记信息</el-button>
+                <el-button v-if="can('adm.revoke')" type="danger" plain @click="doCancelAdmission">撤销入院登记</el-button>
               </template>
             </div>
             <div v-if="!alreadyAdmitted && !canAdmit" class="tiny mt8 right" style="color:#c53030">
@@ -161,13 +161,14 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Postcard, Refresh, Warning } from '@element-plus/icons-vue'
 import { fetchPatientArchive } from '@/api/his'
 import { fmtAmount } from '@/utils/format'
 import { get as getPatient } from '@/store/patients'
 import { accountOf, transferIn } from '@/store/accounts'
-import { goStatus } from '@/utils/guard'
+import { goStatus, assertCan } from '@/utils/guard'
 import { state, persist } from '@/store/db'
 import { log } from '@/store/logs'
 import { PATIENT_STATUS } from '@/mock/dict'
@@ -264,6 +265,7 @@ function openReport(r) {
 }
 
 function doAdmit() {
+  assertCan('adm.confirm', { module: 'ADM', page: '入院登记', action: 'STATUS', label: '办理入院登记', targetType: '入院登记单' })
   if (!canAdmit.value) return
   const p = patient.value
   ElMessageBox.confirm(
@@ -309,6 +311,7 @@ watch(editDlg, (v) => {
 })
 
 function saveEdit() {
+  assertCan('adm.modify', { module: 'ADM', page: '入院登记', action: 'UPDATE', label: '修改入院信息', targetType: '入院登记单' })
   const p = patient.value
   const before = { ...p.admissionInfo }
   p.admissionInfo = { ...p.admissionInfo, ...editForm }
@@ -324,6 +327,7 @@ function saveEdit() {
 }
 
 function doCancelAdmission() {
+  assertCan('adm.revoke', { module: 'ADM', page: '入院登记', action: 'CANCEL', label: '撤销入院登记', targetType: '入院登记单' })
   const p = patient.value
   const hasCharge = state.charges.some((c) => c.patientId === p.patientId && c.status !== 'VOIDED')
   const today = new Date().toISOString().slice(0, 10)

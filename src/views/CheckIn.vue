@@ -87,12 +87,12 @@
               <div class="flex gap8 mt12" style="justify-content:space-between">
                 <div class="flex gap8">
                   <el-button :icon="Document" @click="openReports">查看术前检查报告</el-button>
-                  <el-button :icon="Printer" @click="printConsent">打印手术知情同意书</el-button>
+                  <el-button v-if="can('chk.print')" :icon="Printer" @click="printConsent">打印手术知情同意书</el-button>
                   <el-button @click="openHistory">既往报到记录</el-button>
                 </div>
                 <div class="flex gap8">
-                  <el-button v-if="patient.status === 'IN_SURGERY'" type="warning" plain @click="doCancelCheckIn">取消报到</el-button>
-                  <el-button type="primary" size="large" :disabled="!allOk" @click="doCheckIn">确认报到</el-button>
+                  <el-button v-if="patient.status === 'IN_SURGERY' && can('chk.cancel')" type="warning" plain @click="doCancelCheckIn">取消报到</el-button>
+                  <el-button v-if="can('chk.confirm')" type="primary" size="large" :disabled="!allOk" @click="doCheckIn">确认报到</el-button>
                 </div>
               </div>
 
@@ -153,6 +153,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Document, Printer, InfoFilled } from '@element-plus/icons-vue'
 import { state } from '@/store/db'

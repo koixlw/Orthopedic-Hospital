@@ -6,7 +6,7 @@ import { state, persist } from './db'
 import { log } from './logs'
 import { get as getPatient } from './patients'
 import { push as pushMessage } from './messages'
-import { goStatus, canSchedule } from '@/utils/guard'
+import { goStatus, canSchedule, assertCan } from '@/utils/guard'
 import { fmtDate, fmtTime } from '@/utils/format'
 import { SURGERY_ROOMS, SURGERY_SEQS, ANESTHESIA_TYPES, CANCEL_REASONS } from '@/mock/dict'
 
@@ -126,6 +126,7 @@ function planTimeOf(date) {
 
 /* ---------------- FUNC-SCH-001 创建手术预约 ---------------- */
 export function create(form) {
+  assertCan('sch.create', { module: 'SCH', page: '手术排程', action: 'CREATE', label: '创建手术预约', targetType: '手术排程' })
   const p = getPatient(form.patientId)
   if (!p) throw new Error('请选择患者')
   if (!canSchedule(p)) throw new Error('该患者评估未全部通过或状态不允许，不能创建手术预约')
@@ -210,6 +211,7 @@ export function create(form) {
 
 /* ---------------- FUNC-SCH-003 调整手术安排 ▲招标第 10 项 ---------------- */
 export function adjust(scheduleId, form, reason, channel) {
+  assertCan('sch.adjust', { module: 'SCH', page: '手术排程', action: 'UPDATE', label: '调整手术安排', targetType: '手术排程' })
   const rec = get(scheduleId)
   if (!rec) throw new Error('未找到该排程记录')
   if (!['SCHEDULED', 'CHANGED'].includes(rec.status)) throw new Error('该排程状态不允许调整安排')
@@ -283,6 +285,7 @@ export function adjust(scheduleId, form, reason, channel) {
 
 /* ---------------- FUNC-SCH-004 取消预约 ---------------- */
 export function cancel(scheduleId, reason) {
+  assertCan('sch.cancel', { module: 'SCH', page: '手术排程', action: 'CANCEL', label: '取消手术预约', targetType: '手术排程' })
   const rec = get(scheduleId)
   if (!rec) throw new Error('未找到该排程记录')
   if (rec.status === 'CANCELLED') throw new Error('该预约已取消，不能重复取消')

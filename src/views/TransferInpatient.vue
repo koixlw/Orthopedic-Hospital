@@ -65,10 +65,10 @@
 
       <div class="flex gap8" style="justify-content:flex-end">
         <el-button @click="reset">取消</el-button>
-        <el-button v-if="!patient.transferInfo" type="primary" @click="doTransfer">确认转普通住院</el-button>
+        <el-button v-if="!patient.transferInfo && can('trf.submit')" type="primary" @click="doTransfer">确认转普通住院</el-button>
         <template v-else>
-          <el-button @click="openEdit">修改转住院信息</el-button>
-          <el-button type="danger" plain @click="doCancel">撤销转住院</el-button>
+          <el-button v-if="can('trf.submit')" @click="openEdit">修改转住院信息</el-button>
+          <el-button v-if="can('trf.revoke')" type="danger" plain @click="doCancel">撤销转住院</el-button>
         </template>
       </div>
 
@@ -126,11 +126,12 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Right, Warning } from '@element-plus/icons-vue'
 import { state, persist } from '@/store/db'
 import { get as getPatient, patchPatient } from '@/store/patients'
-import { goStatus } from '@/utils/guard'
+import { goStatus, assertCan } from '@/utils/guard'
 import { log } from '@/store/logs'
 import { TRANSFER_REASONS, TRANSFER_METHODS } from '@/mock/dict'
 import { fmtTime } from '@/utils/format'
@@ -180,6 +181,7 @@ function reset() {
 }
 
 function doTransfer() {
+  assertCan('trf.submit', { module: 'TRF', page: '转普通入院', action: 'STATUS', label: '转普通住院', targetType: '转住院单' })
   errors.reason = form.reason ? '' : '请选择转住院原因'
   errors.method = form.method ? '' : '请选择转住院方式'
   if (form.reason === '其他' && !form.reasonNote) errors.reasonNote = '选择「其他」时必须填写原因说明'
@@ -219,6 +221,7 @@ function openEdit() {
 }
 
 function saveEdit() {
+  assertCan('trf.submit', { module: 'TRF', page: '转普通入院', action: 'UPDATE', label: '修改转住院信息', targetType: '转住院单' })
   const p = patient.value
   const t = p.transferInfo
   if (!editForm.reason || !editForm.method) return ElMessage.warning('转住院原因与方式均为必填')
@@ -238,6 +241,7 @@ function saveEdit() {
 }
 
 function doCancel() {
+  assertCan('trf.revoke', { module: 'TRF', page: '转普通入院', action: 'CANCEL', label: '撤销转普通住院', targetType: '转住院单' })
   const p = patient.value
   const hasCharge = state.charges.some((c) => c.patientId === p.patientId && c.status !== 'VOIDED')
   if (hasCharge) {

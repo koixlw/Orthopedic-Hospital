@@ -5,7 +5,7 @@
         <div class="card-title">手术排程</div>
         <div class="card-sub">日视图按手术间分列、按台次排序；调整安排后自动比对预约信息并生成变动通知</div>
         <div class="right">
-          <el-button type="primary" :icon="Plus" @click="openCreate()">创建预约</el-button>
+          <el-button v-if="can('sch.create')" type="primary" :icon="Plus" @click="openCreate()">创建预约</el-button>
           <el-radio-group v-model="view" size="small" style="margin-left:8px">
             <el-radio-button label="day">日视图</el-radio-button>
             <el-radio-button label="list">列表视图</el-radio-button>
@@ -99,8 +99,8 @@
         </el-table-column>
         <el-table-column label="操作" width="150" align="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openAdjust(row)">调整安排</el-button>
-            <el-button link type="danger" size="small" @click="openCancel(row)">取消预约</el-button>
+            <el-button v-if="can('sch.adjust')" link type="primary" size="small" @click="openAdjust(row)">调整安排</el-button>
+            <el-button v-if="can('sch.cancel')" link type="danger" size="small" @click="openCancel(row)">取消预约</el-button>
           </template>
         </el-table-column>
         <template #empty><div class="empty">当日暂无手术排程</div></template>
@@ -145,7 +145,7 @@
         </el-table-column>
         <el-table-column label="操作" width="110" align="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openCreate({ patientId: row.patientId })">安排手术</el-button>
+            <el-button v-if="can('sch.create')" link type="primary" size="small" @click="openCreate({ patientId: row.patientId })">安排手术</el-button>
           </template>
         </el-table-column>
         <template #empty><div class="empty">暂无待排程患者</div></template>
@@ -314,6 +314,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { can } from '@/store/session'
 import { ElMessage } from 'element-plus'
 import { Plus, ArrowLeft, ArrowRight, MagicStick, Warning } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'

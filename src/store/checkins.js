@@ -5,7 +5,7 @@ import { log } from './logs'
 import { get as getPatient } from './patients'
 import { accountOf } from './accounts'
 import { activeSchedule } from './schedules'
-import { goStatus } from '@/utils/guard'
+import { goStatus, assertCan } from '@/utils/guard'
 import { fmtAmount, fmtDate, fmtTime } from '@/utils/format'
 import { TODAY } from '@/mock/dict'
 
@@ -95,6 +95,7 @@ export function canCheckIn(patientId) {
 
 /** FUNC-CIR-001 报到登记：校验快照入库 + 状态流转 + 排程置为已报到 */
 export function doCheckIn(patientId, method = '手工输入住院号') {
+  assertCan('chk.confirm', { module: 'CIR', page: '手术报到', action: 'CREATE', label: '确认手术报到', targetType: '报到记录' })
   const p = getPatient(patientId)
   if (!p) throw new Error('未找到该患者')
   if (p.status === 'IN_SURGERY') throw new Error('该患者已完成报到，不能重复报到')
@@ -136,6 +137,7 @@ export function doCheckIn(patientId, method = '手工输入住院号') {
 
 /** FUNC-CIR-002 取消报到：记录软作废，状态回退，排程回到已预约/已变更 */
 export function cancelCheckIn(patientId, reason) {
+  assertCan('chk.cancel', { module: 'CIR', page: '手术报到', action: 'CANCEL', label: '取消报到', targetType: '报到记录' })
   if (!reason) throw new Error('请填写取消原因')
   const p = getPatient(patientId)
   if (!p) throw new Error('未找到该患者')
@@ -167,6 +169,7 @@ export function cancelCheckIn(patientId, reason) {
 
 /** FUNC-CIR-003 打印手术知情同意书（假打印，写 EXPORT 日志） */
 export function printConsent(patientId) {
+  assertCan('chk.print', { module: 'CIR', page: '手术报到', action: 'EXPORT', label: '打印知情同意书', targetType: '知情同意书' })
   const p = getPatient(patientId)
   const rec = state.checkins.filter((c) => c.patientId === patientId && !c.voided).slice().pop()
   if (rec) {

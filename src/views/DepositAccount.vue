@@ -98,13 +98,13 @@
           <div class="card-title">账户操作</div>
           <div class="card-sub">四栏金额满足：可用 + 冻结 + 住院 + 已消耗 = 缴存总额</div>
           <div class="right">
-            <el-button v-if="account.status === 'NORMAL'" type="primary" :icon="Plus" @click="depositDlg = true">缴存储值金</el-button>
-            <el-button v-if="account.status === 'NORMAL'" type="warning" :icon="Lock" @click="doFreeze">冻结储值金</el-button>
-            <el-button v-if="account.status === 'FROZEN'" type="primary" :icon="Right" @click="doTransfer">转住院（转入住院储值金）</el-button>
+            <el-button v-if="account.status === 'NORMAL' && can('dep.deposit')" type="primary" :icon="Plus" @click="depositDlg = true">缴存储值金</el-button>
+            <el-button v-if="account.status === 'NORMAL' && can('dep.freeze')" type="warning" :icon="Lock" @click="doFreeze">冻结储值金</el-button>
+            <el-button v-if="account.status === 'FROZEN' && can('dep.transfer')" type="primary" :icon="Right" @click="doTransfer">转住院（转入住院储值金）</el-button>
             <el-button v-if="account.status === 'TRANSFERRED_IN'" disabled>已转入住院账户</el-button>
             <el-button v-if="account.status === 'TRANSFERRED_IN'" @click="viewInpatient">查看住院储值金</el-button>
             <el-button v-if="account.status === 'SETTLED'" @click="viewSettlement">查看门诊结算单</el-button>
-            <el-button v-if="['NORMAL','FROZEN','SCHEDULED'].includes(account.status) && patient.status !== 'WITHDRAWN'"
+            <el-button v-if="['NORMAL','FROZEN','SCHEDULED'].includes(account.status) && patient.status !== 'WITHDRAWN' && can('dep.withdraw')"
               type="danger" plain @click="openWithdraw">退出日间手术</el-button>
           </div>
         </div>
@@ -148,7 +148,7 @@
             </el-table-column>
             <el-table-column label="操作" width="80" align="center">
               <template #default="{ row }">
-                <el-button v-if="row.type === 'DEPOSIT' && !row.voided && account.status === 'NORMAL'" link type="danger" size="small"
+                <el-button v-if="row.type === 'DEPOSIT' && !row.voided && account.status === 'NORMAL' && can('dep.reverse')" link type="danger" size="small"
                   @click="openReverse(row)">冲正</el-button>
               </template>
             </el-table-column>
@@ -187,7 +187,7 @@
         <div class="card-head">
           <div class="card-title">本账户操作留痕</div>
           <div class="card-sub">只追加、不可修改，每笔操作均记录九要素（操作人 / 时间 / 模块 / 对象 / 变更前后 / 原因 / 结果）</div>
-          <div class="right">
+          <div v-if="can('log')" class="right">
             <el-button text size="small" @click="router.push('/log')">查看全部日志</el-button>
           </div>
         </div>
@@ -327,6 +327,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Wallet, Coin, Lock, OfficeBuilding, Right, Plus, Warning } from '@element-plus/icons-vue'
 import { fmtAmount } from '@/utils/format'

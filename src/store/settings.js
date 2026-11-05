@@ -1,4 +1,5 @@
 // OBJ-SYS-002 系统参数（3.19）—— 全站唯一「没有列表」的页面
+import { assertCan } from '@/utils/guard'
 import { state, persist } from './db'
 import { log } from './logs'
 import { recalcPendingSafe } from './messages'
@@ -27,6 +28,7 @@ export const CHANNEL_OPTIONS = [
 
 /** FUNC-MSG-002 保存参数：校验 → 写参数 → 重算未发送提醒 → 留痕，返回受影响通知条数 */
 export function save(form) {
+  assertCan('param.save', { module: 'SYS', page: '系统参数', action: 'UPDATE', label: '修改系统参数', targetType: '系统参数' })
   const days = Number(form.preAdmissionNoticeDays)
   if (!(days >= 1 && days <= 7)) throw new Error('入院前通知提前天数必须在 1—7 天之间')
   if (!String(form.fastingTip || '').trim()) throw new Error('术前禁食提示语不能为空')
@@ -55,6 +57,7 @@ export function save(form) {
 }
 
 export function restoreDefault() {
+  assertCan('param.save', { module: 'SYS', page: '系统参数', action: 'UPDATE', label: '修改系统参数', targetType: '系统参数' })
   const before = {}
   Object.keys(SETTING_LABEL).forEach((k) => { before[k] = state.settings[k] })
   Object.assign(state.settings, { ...DEFAULT_SETTINGS })
