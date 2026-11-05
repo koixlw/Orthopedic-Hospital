@@ -204,7 +204,7 @@
       </template>
     </el-drawer>
   </div>
-  <PickPatient v-else to="/order" title="请选择患者后录入手术医嘱"
+  <PickPatient v-else to="/order" :title="can('ord.add') ? '请选择患者后录入手术医嘱' : '请选择患者查看手术医嘱'"
     :statuses="['ADMITTED', 'IN_SURGERY']"
     desc="手术医嘱按患者开立，选择下方已入院患者或返回工作台，从「待办」中进入该患者医嘱页" />
 </template>

@@ -133,25 +133,29 @@ export const PERM_LABEL = {
  * DOCTOR 转普通住院 / 手术费用 / 手术医嘱（含专科与麻醉评估）；ADMIN 全部。
  */
 const GRANTS = {
+  // 逐条对照《开发任务单》的「功能—角色矩阵」，每个权限码后面标注来源功能编号
   NURSE: [
-    'workbench', 'apply', 'evaluate', 'schedule', 'deposit', 'admission', 'checkin', 'message', 'trace',
-    'apply.receive', 'apply.build', 'apply.correct', 'apply.return',
-    'sch.create', 'sch.adjust', 'sch.cancel',
-    'dep.freeze', 'dep.transfer', 'dep.withdraw',
-    'adm.confirm', 'adm.modify', 'adm.revoke',
-    'chk.confirm', 'chk.cancel', 'chk.print',
-    'msg.resend'
+    // 页面：申请、排程、储值金（只做转入与退出，不碰钱箱）、入院、报到、医嘱（只读）、消息、轨迹
+    'workbench', 'apply', 'schedule', 'deposit', 'admission', 'checkin', 'order', 'message', 'trace',
+    'apply.receive', 'apply.build',            // FUNC-APL-001 接收申请单、FUNC-BAS-003 从申请单建档
+    'sch.create', 'sch.adjust', 'sch.cancel',  // FUNC-SCH-001/003/004
+    'dep.transfer', 'dep.withdraw',            // FUNC-DEP-003 转入住院储值金、FUNC-DEP-004 退出并门诊结算
+    'adm.confirm', 'adm.modify', 'adm.revoke', // FUNC-ADM-002/004/005
+    'chk.confirm', 'chk.cancel', 'chk.print',  // FUNC-CIR-001/002/003
+    'msg.resend'                               // FUNC-MSG-001 重发通知
   ],
   CASHIER: [
+    // 钱箱角色：缴存、冻结、冲正、门诊结算；不含「转入住院储值金」（DEP-003 属护士）
     'workbench', 'deposit', 'trace',
-    'dep.deposit', 'dep.freeze', 'dep.withdraw', 'dep.reverse'
+    'dep.deposit', 'dep.freeze', 'dep.withdraw', 'dep.reverse' // FUNC-DEP-001/002/004/006
   ],
   DOCTOR: [
-    'workbench', 'evaluate', 'charge', 'order', 'transfer', 'trace',
-    'eval.submit', 'eval.revoke',
-    'chg.add', 'chg.import', 'chg.submit', 'chg.void', 'chg.reenter',
-    'ord.add', 'ord.stop', 'ord.void', 'ord.remove',
-    'trf.submit', 'trf.revoke'
+    'workbench', 'apply', 'evaluate', 'charge', 'order', 'transfer', 'trace',
+    'apply.correct', 'apply.return',           // FUNC-APL-002/003 开单医师修正、退回申请单
+    'eval.submit', 'eval.revoke',              // FUNC-EVL-003/004/005
+    'chg.add', 'chg.import', 'chg.submit', 'chg.void', 'chg.reenter', // FUNC-CHG-001~006
+    'ord.add', 'ord.stop', 'ord.void', 'ord.remove',                  // FUNC-ORD-001/003/004/005
+    'trf.submit', 'trf.revoke'                 // FUNC-TRF-001/004
   ],
   // 演示需要：管理员全绿，正式系统按岗位分离（README 与系统参数页均有说明）
   ADMIN: ['*']

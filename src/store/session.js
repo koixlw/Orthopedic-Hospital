@@ -8,15 +8,15 @@ import { fmtTime } from '@/utils/format'
 export const ROLES = [
   {
     key: 'NURSE', name: '陈静', roleLabel: '护士', title: '日间手术中心护士',
-    account: 'N1024', duty: '入院登记、储值金冻结与转入、退出结算'
+    account: 'N1024', duty: '接收申请单与建档、手术排程、入院登记与报到、储值金转入与退出结算'
   },
   {
     key: 'CASHIER', name: '王芳', roleLabel: '收费员', title: '收费员',
-    account: 'C2087', duty: '储值金缴存、冻结、门诊结算'
+    account: 'C2087', duty: '储值金缴存、冻结、冲正、门诊结算'
   },
   {
     key: 'DOCTOR', name: '张海涛', roleLabel: '医生', title: '医生（含主刀与麻醉）',
-    account: 'D3312', duty: '转普通住院、手术费用、手术医嘱'
+    account: 'D3312', duty: '申请单修正、术前评估、转普通住院、手术费用与医嘱'
   },
   {
     key: 'ADMIN', name: '李伟', roleLabel: '系统管理员', title: '系统管理员（演示默认）',

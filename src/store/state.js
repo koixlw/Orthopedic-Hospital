@@ -1,5 +1,5 @@
 // 全局响应式状态 + localStorage 持久化（5.8）
-// 键名固定 PREOP_DEMO_V2；读不到就用种子数据，不做版本兼容迁移
+// 键名固定 PREOP_DEMO_V3；读不到就用种子数据，不做版本兼容迁移
 import { reactive } from 'vue'
 import {
   seedPatients, seedAccounts, seedApplies, seedEvals, seedSchedules,
@@ -7,7 +7,7 @@ import {
   seedGroups, seedEvalReasons, seedCharges, seedOrders, seedLogs
 } from '@/mock/dict'
 
-export const STORAGE_KEY = 'PREOP_DEMO_V2'
+export const STORAGE_KEY = 'PREOP_DEMO_V3'
 export const LOG_MAX = 2000
 // 默认登录为演示管理员：拥有全部权限，打开即进主界面（4.1 演示默认角色）
 export const DEFAULT_SESSION = { role: 'ADMIN', name: '李伟', roleLabel: '系统管理员', account: 'A0001', loggedIn: true, loginAt: '' }

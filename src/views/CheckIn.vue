@@ -296,7 +296,7 @@ function doCancelCheckIn() {
 
 function goLink(c) {
   if (c.link.startsWith('/deposit/')) router.push(c.link)
-  else if (c.key === 'eval') router.push('/evaluation/' + pid.value)
+  else if (c.key === 'eval') { if (can('evaluate')) router.push('/evaluation/' + pid.value) }
   else if (c.key === 'date') router.push('/schedule?patient=' + pid.value)
   else router.push('/schedule?patient=' + pid.value)
 }

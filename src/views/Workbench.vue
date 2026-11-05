@@ -15,7 +15,7 @@
           <div class="val">{{ stats.waitingSchedule }} <small>人</small></div>
         </div>
       </div>
-      <div class="stat-card orange" @click="go('/evaluation')">
+      <div class="stat-card orange" @click="can('evaluate') && go('/evaluation')">
         <div class="ico"><el-icon><FirstAidKit /></el-icon></div>
         <div>
           <div class="lbl">待评估</div>
@@ -134,7 +134,7 @@
                 <el-button v-if="row.status === 'APPLIED' && can('apply.build')" link type="primary" size="small" @click="go('/apply')">建档</el-button>
 
                 <template v-if="row.status === 'DAY_SURGERY'">
-                  <el-button v-if="row.evalStatus.specialist === 'FAILED'" link type="info" size="small"
+                  <el-button v-if="row.evalStatus.specialist === 'FAILED' && can('evaluate')" link type="info" size="small"
                     @click="go('/evaluation/' + row.patientId)">查看评估</el-button>
                   <el-button v-else-if="row.evalStatus.specialist === 'PENDING' && can('evaluate')" link type="primary" size="small"
                     @click="go('/evaluation/' + row.patientId)">评估</el-button>
@@ -214,7 +214,7 @@
               <el-radio-button label="医生" />
               <el-radio-button label="护士" />
             </el-radio-group>
-            <el-table :data="report.byDept" size="small" border>
+            <el-table :data="statRows" size="small" border>
               <el-table-column prop="name" :label="statBy" />
               <el-table-column prop="count" label="台数" width="70" align="right" />
               <el-table-column prop="transfer" label="转住院" width="74" align="right" />
@@ -392,22 +392,48 @@ const report = computed(() => {
   const inMonth = sc.filter((s) => s.surgeryDate.startsWith(month) && s.status !== 'CANCELLED')
   const anes = {}
   inMonth.forEach((s) => { anes[s.anesthesiaType] = (anes[s.anesthesiaType] || 0) + 1 })
-  const byDept = [
-    { name: '普外科', count: inMonth.length, transfer: state.patients.filter((p) => p.status === 'TRANSFERRED').length, withdraw: state.patients.filter((p) => p.status === 'WITHDRAWN').length },
-    { name: '骨科', count: 0, transfer: 0, withdraw: 0 },
-    { name: '泌尿外科', count: 0, transfer: 0, withdraw: 0 }
-  ]
-  byDept[0].count = Math.max(inMonth.length, 1)
   return {
-    month: Math.max(inMonth.length, 4),
+    month: inMonth.length,
     done: state.patients.filter((p) => p.status === 'DISCHARGED').length + inMonth.filter((s) => s.status === 'COMPLETED').length,
     cancelled: sc.filter((s) => s.status === 'CANCELLED').length,
     discharged: state.patients.filter((p) => p.status === 'DISCHARGED').length,
     transferred: state.patients.filter((p) => p.status === 'TRANSFERRED').length,
     withdrawn: state.patients.filter((p) => p.status === 'WITHDRAWN').length,
-    anes: Object.keys(anes).length ? anes : { 全身麻醉: 0 },
-    byDept
+    anes: Object.keys(anes).length ? anes : { 全身麻醉: 0 }
   }
+})
+
+// 按科室 / 医生 / 护士三个维度统计（招标 15-1）
+const statRows = computed(() => {
+  const month = dayjs().format('YYYY-MM')
+  const map = new Map()
+  const row = (name) => {
+    if (!map.has(name)) map.set(name, { name, count: 0, transfer: 0, withdraw: 0 })
+    return map.get(name)
+  }
+  const keyOfPatient = (p) => {
+    if (!p) return '未指定'
+    if (statBy.value === '医生') return p.surgeon || '未指定'
+    if (statBy.value === '护士') return p.nurse || '未指定'
+    return p.dept || '未指定'
+  }
+  // 转住院 / 退出按患者归属维度计
+  state.patients.forEach((p) => {
+    const r = row(keyOfPatient(p))
+    if (p.status === 'TRANSFERRED') r.transfer += 1
+    if (p.status === 'WITHDRAWN') r.withdraw += 1
+  })
+  // 台数按手术日期归属当月，已取消不计入
+  state.schedules
+    .filter((s) => s.surgeryDate.startsWith(month) && s.status !== 'CANCELLED')
+    .forEach((s) => {
+      const p = state.patients.find((x) => x.patientId === s.patientId)
+      const key = statBy.value === '医生' ? (s.surgeon || '未指定') : keyOfPatient(p)
+      row(key).count += 1
+    })
+  return [...map.values()]
+    .filter((r) => r.count + r.transfer + r.withdraw > 0)
+    .sort((a, b) => b.count - a.count || b.transfer - a.transfer)
 })
 
 const scheduleOf = (pid) => activeSchedule(pid)

@@ -195,7 +195,7 @@ export function buildPatient(applyId, extra = {}) {
     inpatientNo: apply.inpatientNo,
     idCard: apply.idCard,
     phone: apply.phone,
-    dept: '日间手术中心',
+    dept: (apply.applyDept || '').replace(/门诊$/, '') || '日间手术中心',
     bedNo: extra.bedNo || '',
     admissionCertNo: 'RJ' + apply.inpatientNo.replace(/^D/, ''),
     surgeryName: apply.surgeryName,
