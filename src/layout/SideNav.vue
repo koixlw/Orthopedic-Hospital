@@ -33,7 +33,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { state, resetAll } from '@/store/db'
-import { pendingSpecialist, pendingAnesthesia } from '@/store/evals'
+import { listByStatus } from '@/store/evals'
 import { can } from '@/store/session'
 import { NAV_GROUPS } from './nav'
 
@@ -46,7 +46,8 @@ const groups = computed(() => NAV_GROUPS
 
 const counts = computed(() => ({
   apply: state.applies.filter((a) => a.status === 'PENDING').length,
-  eval: pendingSpecialist().length + pendingAnesthesia().length,
+  // 待评估 = 报告未完成 + 待专科评估 + 待麻醉评估
+  eval: listByStatus('REPORT_PENDING').length + listByStatus('SPECIALIST_PENDING').length + listByStatus('ANESTHESIA_PENDING').length,
   checkin: state.patients.filter((p) => p.status === 'ADMITTED').length
 }))
 

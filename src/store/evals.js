@@ -13,6 +13,20 @@ export const ASA_LEVELS = ['ASA I', 'ASA II', 'ASA III', 'ASA IV']
 
 export const TYPE_LABEL = { SPECIALIST: '专科评估', ANESTHESIA: '麻醉评估' }
 
+/**
+ * 术前评估列表的 5 种状态（问题描述口径）
+ * 判定顺序：已出结论优先，其次看检查报告是否齐全，最后看评估到了哪一步。
+ */
+export const EVAL_STATUS = {
+  REPORT_PENDING: { label: '报告未完成', type: 'warning', action: '待报告' },
+  SPECIALIST_PENDING: { label: '待专科评估', type: 'primary', action: '专科评估' },
+  ANESTHESIA_PENDING: { label: '待麻醉评估', type: 'primary', action: '麻醉评估' },
+  FINISHED: { label: '已完成', type: 'success', action: '查看' },
+  FAILED: { label: '评估不通过', type: 'danger', action: '查看' }
+}
+
+export const EVAL_STATUS_ORDER = ['REPORT_PENDING', 'SPECIALIST_PENDING', 'ANESTHESIA_PENDING', 'FINISHED', 'FAILED']
+
 export function listOf(patientId) {
   return state.evals.filter((e) => e.patientId === patientId)
 }
@@ -25,29 +39,58 @@ export function latest(patientId, type) {
 
 const OPEN = ['DAY_SURGERY', 'SCHEDULED']
 
-/** 待专科评估：专科还处在待评估 */
+/** 报告完成度（医技系统回传的快照，落到患者主数据上供列表页同步读取） */
+function progressOf(patient) {
+  const rp = patient?.reportProgress
+  if (!rp) return { done: 4, total: 4 }
+  return { done: Number(rp.done || 0), total: Number(rp.total || 0) }
+}
+
+/**
+ * 患者当前所处的术前评估状态（5 选 1）
+ * 已出结论（通过 / 不通过）优先；未出结论时先看报告是否齐全，再看评估进度。
+ */
+export function statusOf(patient) {
+  if (!patient) return ''
+  const s = patient.evalStatus?.specialist
+  const a = patient.evalStatus?.anesthesia
+  if (s === 'FAILED' || a === 'FAILED') return 'FAILED'
+  if (s === 'PASSED' && a === 'PASSED') return 'FINISHED'
+  const rp = progressOf(patient)
+  if (rp.total > 0 && rp.done < rp.total) return 'REPORT_PENDING'
+  if (s !== 'PASSED') return 'SPECIALIST_PENDING'
+  return 'ANESTHESIA_PENDING'
+}
+
+/** 按状态取患者列表：三个「进行中」状态只统计仍在术前流程内的患者 */
+export function listByStatus(status) {
+  return state.patients.filter((p) => {
+    if (statusOf(p) !== status) return false
+    if (['REPORT_PENDING', 'SPECIALIST_PENDING', 'ANESTHESIA_PENDING'].includes(status)) {
+      return OPEN.includes(p.status)
+    }
+    return true
+  })
+}
+
+/** 待专科评估：报告已齐、专科还处在待评估 */
 export function pendingSpecialist() {
-  return state.patients.filter((p) =>
-    OPEN.includes(p.status) && ['PENDING', undefined, null, ''].includes(p.evalStatus?.specialist))
+  return listByStatus('SPECIALIST_PENDING')
 }
 
 /** 待麻醉评估：专科已通过、麻醉未出结论 */
 export function pendingAnesthesia() {
-  return state.patients.filter((p) =>
-    OPEN.includes(p.status) && p.evalStatus?.specialist === 'PASSED' &&
-    ['PENDING', undefined, null, ''].includes(p.evalStatus?.anesthesia))
+  return listByStatus('ANESTHESIA_PENDING')
 }
 
 /** 已完成：双评估均通过 */
 export function finished() {
-  return state.patients.filter((p) =>
-    p.evalStatus?.specialist === 'PASSED' && p.evalStatus?.anesthesia === 'PASSED')
+  return listByStatus('FINISHED')
 }
 
 /** 不通过：任一类评估结论为不通过 */
 export function failed() {
-  return state.patients.filter((p) =>
-    p.evalStatus?.specialist === 'FAILED' || p.evalStatus?.anesthesia === 'FAILED')
+  return listByStatus('FAILED')
 }
 
 function nextEvalId() {
@@ -69,7 +112,7 @@ export function submitSpecialist(patientId, form) {
   assertCan('eval.submit', { module: 'EVL', page: '术前评估', action: 'CREATE', label: '提交评估结论', targetType: '评估记录' })
   const p = getPatient(patientId)
   if (!p) throw new Error('未找到该患者')
-  if (latest(patientId, SPECIALIST)) throw new Error('该患者已有专科评估结论，如需修改请先撤销')
+  if (latest(patientId, SPECIALIST)) throw new Error('该患者已有专科评估结论，评估结论一经提交不可撤销')
   assertConclusion(form)
   if (p.evalStatus?.anesthesia === 'FAILED') throw new Error('麻醉评估已判定不通过，不能再提交专科评估')
 
@@ -119,7 +162,7 @@ export function submitAnesthesia(patientId, form) {
   if (!p) throw new Error('未找到该患者')
   const sp = latest(patientId, SPECIALIST)
   if (!sp || sp.conclusion !== 'PASSED') throw new Error('专科评估未通过，不能进行麻醉评估')
-  if (latest(patientId, ANESTHESIA)) throw new Error('该患者已有麻醉评估结论，如需修改请先撤销')
+  if (latest(patientId, ANESTHESIA)) throw new Error('该患者已有麻醉评估结论，评估结论一经提交不可撤销')
   assertConclusion(form)
   if (form.conclusion === 'PASSED') {
     if (!form.asa) throw new Error('请选择 ASA 分级')
@@ -168,33 +211,6 @@ export function submitAnesthesia(patientId, form) {
   })
   persist()
   return record
-}
-
-/** FUNC-EVL-005 撤销评估结论（软作废，历史保留） */
-export function revoke(patientId, type, reason) {
-  assertCan('eval.revoke', { module: 'EVL', page: '术前评估', action: 'CANCEL', label: '撤销评估结论', targetType: '评估记录' })
-  if (!reason) throw new Error('请填写撤销原因')
-  const rec = latest(patientId, type)
-  if (!rec) throw new Error('未找到可撤销的' + (TYPE_LABEL[type] || '评估') + '记录')
-  const p = getPatient(patientId)
-  if (p && p.status === 'SCHEDULED' && type === ANESTHESIA) {
-    throw new Error('该患者已完成手术预约，不能撤销评估，请先取消预约')
-  }
-  const before = { 结论: rec.conclusion === 'PASSED' ? '通过' : '不通过' }
-  rec.voided = true
-  rec.voidReason = reason
-  if (p) {
-    const key = type === SPECIALIST ? 'specialist' : 'anesthesia'
-    p.evalStatus = { ...(p.evalStatus || {}), [key]: 'PENDING' }
-    if (p.evalFailReason && type === SPECIALIST) p.evalFailReason = ''
-  }
-  log({
-    module: 'EVL', page: '术前评估', action: 'VOID',
-    targetType: '术前评估', targetId: rec.evalId, targetName: p ? p.name + ' ' + p.inpatientNo : patientId,
-    patientId, before, after: { 结论: '已撤销', 评估状态: '待评估' }, reason
-  })
-  persist()
-  return rec
 }
 
 /** 取该患者最近一次不通过的原因（退出日间手术时自动预填，RULE-EVL-002 衔接） */

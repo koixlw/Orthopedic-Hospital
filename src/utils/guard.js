@@ -113,7 +113,7 @@ export const PAGE_LABEL = {
 export const PERM_LABEL = {
   ...PAGE_LABEL,
   'apply.receive': '接收申请单', 'apply.build': '为申请单建档', 'apply.correct': '更正申请单', 'apply.return': '退回申请单',
-  'eval.submit': '提交评估结论', 'eval.revoke': '撤销评估结论',
+  'eval.submit': '提交评估结论',
   'sch.create': '创建手术预约', 'sch.adjust': '调整手术安排', 'sch.cancel': '取消手术预约',
   'dep.deposit': '办理储值金缴存', 'dep.freeze': '冻结储值金', 'dep.transfer': '转入住院储值金',
   'dep.withdraw': '办理退出结算', 'dep.reverse': '冲正储值金流水',
@@ -153,7 +153,7 @@ const GRANTS = {
   DOCTOR: [
     'workbench', 'apply', 'evaluate', 'charge', 'order', 'transfer', 'trace',
     'apply.correct', 'apply.return',           // FUNC-APL-002/003 开单医师修正、退回申请单
-    'eval.submit', 'eval.revoke',              // FUNC-EVL-003/004/005
+    'eval.submit',                            // FUNC-EVL-003/004（评估结论不可撤销，无撤销权限）
     'chg.add', 'chg.import', 'chg.submit', 'chg.void', 'chg.reenter', // FUNC-CHG-001~006
     'ord.add', 'ord.stop', 'ord.void', 'ord.remove',                  // FUNC-ORD-001/003/004/005
     'trf.submit', 'trf.revoke'                 // FUNC-TRF-001/004

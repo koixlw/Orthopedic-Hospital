@@ -9,8 +9,21 @@ export const dt = (n, h, m, s = 0) =>
   dayjs().add(n, 'day').hour(h).minute(m).second(s).format('YYYY-MM-DD HH:mm:ss')
 
 /* ---------------- 患者主数据（8 条，覆盖 8 个状态） ---------------- */
+
+/**
+ * 检查报告未回传的患者（模拟医技系统尚未出报告）
+ * 术前评估列表据此判定「报告未完成」，与 seedExams 的报告状态保持同一口径
+ */
+export const REPORT_PENDING_PATIENTS = ['P002', 'P015', 'P016']
+
+/** 报告完成度快照（医技系统回传，落到患者主数据供列表页同步读取） */
+export function reportProgressOf(patientId) {
+  const pending = REPORT_PENDING_PATIENTS.includes(patientId)
+  return { done: pending ? 3 : 4, total: 4 }
+}
+
 export function seedPatients() {
-  return [
+  const list = [
     {
       patientId: 'P001', name: '张建国', gender: '男', age: 58, inpatientNo: 'D2026001',
       idCard: '5101**********1234', phone: '138****6721', dept: '关节外科', bedNo: '',
@@ -107,8 +120,93 @@ export function seedPatients() {
       admissionInfo: null, transferInfo: null,
       withdrawInfo: { reason: '评估不通过', note: '凝血功能异常，INR 1.82，停用利伐沙班不足 7 天', at: dt(-2, 10, 12), operator: '陈静' },
       statusLogs: []
+    },
+    /* ---- 术前评估演示患者：覆盖列表 5 种状态，每种多条 ---- */
+    {
+      patientId: 'P009', name: '邓文华', gender: '男', age: 52, inpatientNo: 'D2026016',
+      idCard: '5101**********1182', phone: '135****4471', dept: '关节外科', bedNo: '',
+      admissionCertNo: 'RJ2026016', surgeryName: '肩关节镜下肩袖修补术', surgeryCode: '83.6300',
+      plannedSurgeryDate: d(3), surgeon: '张海涛', surgeryRoom: '',
+      diagnosis: '右肩袖全层撕裂（冈上肌）', status: 'DAY_SURGERY',
+      allergy: '无', applyId: 'APL014', nurse: '陈静',
+      evalStatus: { specialist: 'PENDING', anesthesia: 'PENDING' },
+      admissionInfo: null, transferInfo: null, withdrawInfo: null, statusLogs: []
+    },
+    {
+      patientId: 'P010', name: '邱美兰', gender: '女', age: 44, inpatientNo: 'D2026017',
+      idCard: '5101**********2290', phone: '136****3390', dept: '运动医学科', bedNo: '',
+      admissionCertNo: 'RJ2026017', surgeryName: '髋关节镜下关节清理术', surgeryCode: '80.8600',
+      plannedSurgeryDate: d(4), surgeon: '周立', surgeryRoom: '',
+      diagnosis: '右髋关节游离体（陈旧性损伤）', status: 'DAY_SURGERY',
+      allergy: '磺胺类', applyId: 'APL015', nurse: '陈静',
+      evalStatus: { specialist: 'PENDING', anesthesia: 'PENDING' },
+      admissionInfo: null, transferInfo: null, withdrawInfo: null, statusLogs: []
+    },
+    {
+      patientId: 'P011', name: '谭志刚', gender: '男', age: 61, inpatientNo: 'D2026018',
+      idCard: '5101**********3345', phone: '137****8815', dept: '脊柱外科', bedNo: '',
+      admissionCertNo: 'RJ2026018', surgeryName: '椎间孔镜下髓核摘除术', surgeryCode: '80.5100',
+      plannedSurgeryDate: d(2), surgeon: '李伟', surgeryRoom: '',
+      diagnosis: '腰 4/5 椎间盘突出症（左侧）', status: 'DAY_SURGERY',
+      allergy: '无', applyId: 'APL016', nurse: '陈静',
+      evalStatus: { specialist: 'PASSED', anesthesia: 'PENDING' },
+      admissionInfo: null, transferInfo: null, withdrawInfo: null, statusLogs: []
+    },
+    {
+      patientId: 'P012', name: '毛雪梅', gender: '女', age: 38, inpatientNo: 'D2026019',
+      idCard: '5101**********4471', phone: '138****2264', dept: '手外科', bedNo: '',
+      admissionCertNo: 'RJ2026019', surgeryName: '腕管切开减压术', surgeryCode: '04.4300',
+      plannedSurgeryDate: d(1), surgeon: '周立', surgeryRoom: '',
+      diagnosis: '左腕管综合征（中度）', status: 'DAY_SURGERY',
+      allergy: '青霉素', applyId: 'APL017', nurse: '陈静',
+      evalStatus: { specialist: 'PASSED', anesthesia: 'PENDING' },
+      admissionInfo: null, transferInfo: null, withdrawInfo: null, statusLogs: []
+    },
+    {
+      patientId: 'P013', name: '卢长海', gender: '男', age: 66, inpatientNo: 'D2026020',
+      idCard: '5101**********5583', phone: '139****1177', dept: '创伤骨科', bedNo: '',
+      admissionCertNo: 'RJ2026020', surgeryName: '骨折内固定取出术', surgeryCode: '78.6300',
+      plannedSurgeryDate: d(-1), surgeon: '张海涛', surgeryRoom: '',
+      diagnosis: '左股骨骨折术后（内固定存留）', status: 'DAY_SURGERY',
+      allergy: '无', applyId: 'APL018', nurse: '陈静',
+      evalStatus: { specialist: 'FAILED', anesthesia: 'PENDING' }, evalFailReason: '感染未控制',
+      admissionInfo: null, transferInfo: null, withdrawInfo: null, statusLogs: []
+    },
+    {
+      patientId: 'P014', name: '尹春燕', gender: '女', age: 49, inpatientNo: 'D2026021',
+      idCard: '5101**********6694', phone: '133****5580', dept: '足踝外科', bedNo: '',
+      admissionCertNo: 'RJ2026021', surgeryName: '拇外翻截骨矫形术', surgeryCode: '77.5100',
+      plannedSurgeryDate: d(-2), surgeon: '张海涛', surgeryRoom: '',
+      diagnosis: '右足踇外翻（中度）', status: 'WITHDRAWN',
+      allergy: '无', applyId: 'APL019', nurse: '陈静',
+      evalStatus: { specialist: 'PASSED', anesthesia: 'FAILED' }, evalFailReason: '心肺功能不全',
+      admissionInfo: null, transferInfo: null,
+      withdrawInfo: { reason: '评估不通过', note: '麻醉评估不通过：心肺功能不全，ASA IV 级', at: dt(-1, 15, 30), operator: '张海涛' },
+      statusLogs: []
+    },
+    {
+      patientId: 'P015', name: '段志伟', gender: '男', age: 57, inpatientNo: 'D2026022',
+      idCard: '5101**********7715', phone: '135****6623', dept: '关节外科', bedNo: '',
+      admissionCertNo: 'RJ2026022', surgeryName: '膝关节镜下半月板成形术', surgeryCode: '80.6001',
+      plannedSurgeryDate: d(5), surgeon: '张海涛', surgeryRoom: '',
+      diagnosis: '左膝内侧半月板损伤（Ⅱ级）', status: 'DAY_SURGERY',
+      allergy: '无', applyId: 'APL020', nurse: '陈静',
+      evalStatus: { specialist: 'PENDING', anesthesia: 'PENDING' },
+      admissionInfo: null, transferInfo: null, withdrawInfo: null, statusLogs: []
+    },
+    {
+      patientId: 'P016', name: '施文娟', gender: '女', age: 41, inpatientNo: 'D2026023',
+      idCard: '5101**********8826', phone: '136****9948', dept: '运动医学科', bedNo: '',
+      admissionCertNo: 'RJ2026023', surgeryName: '肩关节镜下肩峰成形术', surgeryCode: '81.8300',
+      plannedSurgeryDate: d(6), surgeon: '周立', surgeryRoom: '',
+      diagnosis: '右肩峰下撞击综合征', status: 'DAY_SURGERY',
+      allergy: '无', applyId: 'APL021', nurse: '陈静',
+      evalStatus: { specialist: 'PENDING', anesthesia: 'PENDING' },
+      admissionInfo: null, transferInfo: null, withdrawInfo: null, statusLogs: []
     }
   ]
+  // 报告完成度统一按医技系统口径补齐
+  return list.map((p) => ({ ...p, reportProgress: reportProgressOf(p.patientId) }))
 }
 
 /* ---------------- 储值金账户 ---------------- */
@@ -200,6 +298,65 @@ export function seedAccounts() {
         flow('F0072', dt(-5, 9, 12, 33), 'FREEZE', -4500, 0, '术前检查费用记账，全额冻结', '王芳'),
         flow('F0073', dt(-2, 10, 30, 5), 'SETTLE', -4500, 0, '退出日间手术，门诊结算退回 ¥3,940.00', '王芳')
       ]
+    },
+    /* ---- 术前评估演示患者的专项储值金账户 ---- */
+    {
+      accountId: 'A009', patientId: 'P009', totalDeposit: 6000, available: 6000, frozen: 0,
+      inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'NORMAL', settlement: null,
+      flows: [flow('F0081', dt(-3, 9, 20, 11), 'DEPOSIT', 6000, 6000, '门诊缴存日间手术专项储值金', '王芳')]
+    },
+    {
+      accountId: 'A010', patientId: 'P010', totalDeposit: 7500, available: 7500, frozen: 0,
+      inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'NORMAL', settlement: null,
+      flows: [flow('F0082', dt(-2, 14, 5, 47), 'DEPOSIT', 7500, 7500, '门诊缴存日间手术专项储值金', '王芳')]
+    },
+    {
+      accountId: 'A011', patientId: 'P011', totalDeposit: 8000, available: 0, frozen: 8000,
+      inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'FROZEN', settlement: null,
+      flows: [
+        flow('F0083', dt(-4, 9, 15, 20), 'DEPOSIT', 8000, 8000, '门诊缴存日间手术专项储值金', '王芳'),
+        flow('F0084', dt(-3, 8, 50, 3), 'FREEZE', -8000, 0, '术前检查费用记账，全额冻结', '王芳')
+      ]
+    },
+    {
+      accountId: 'A012', patientId: 'P012', totalDeposit: 5000, available: 5000, frozen: 0,
+      inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'NORMAL', settlement: null,
+      flows: [flow('F0085', dt(-2, 10, 40, 26), 'DEPOSIT', 5000, 5000, '门诊缴存日间手术专项储值金', '王芳')]
+    },
+    {
+      accountId: 'A013', patientId: 'P013', totalDeposit: 6500, available: 0, frozen: 6500,
+      inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'FROZEN', settlement: null,
+      flows: [
+        flow('F0086', dt(-5, 10, 30, 2), 'DEPOSIT', 6500, 6500, '门诊缴存日间手术专项储值金', '王芳'),
+        flow('F0087', dt(-4, 9, 5, 41), 'FREEZE', -6500, 0, '术前检查费用记账，全额冻结', '王芳')
+      ]
+    },
+    {
+      accountId: 'A014', patientId: 'P014', totalDeposit: 5200, available: 0, frozen: 0,
+      inpatientDeposit: 0, consumed: 560, refunded: 4640, status: 'SETTLED',
+      settlement: {
+        settlementNo: 'JSM20261104002', at: dt(-1, 15, 30), reason: '评估不通过', note: '麻醉评估不通过：心肺功能不全，ASA IV 级',
+        lines: [
+          { name: '血常规检验', amount: 180 }, { name: '凝血四项', amount: 260 },
+          { name: '心电图检查', amount: 120 }
+        ],
+        total: 560, refund: 4640
+      },
+      flows: [
+        flow('F0088', dt(-6, 9, 12, 45), 'DEPOSIT', 5200, 5200, '门诊缴存日间手术专项储值金', '王芳'),
+        flow('F0089', dt(-5, 8, 30, 19), 'FREEZE', -5200, 0, '术前检查费用记账，全额冻结', '王芳'),
+        flow('F0090', dt(-1, 15, 30, 8), 'SETTLE', -5200, 0, '退出日间手术，门诊结算退回 ¥4,640.00', '王芳')
+      ]
+    },
+    {
+      accountId: 'A015', patientId: 'P015', totalDeposit: 7000, available: 7000, frozen: 0,
+      inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'NORMAL', settlement: null,
+      flows: [flow('F0091', dt(-1, 11, 5, 33), 'DEPOSIT', 7000, 7000, '门诊缴存日间手术专项储值金', '王芳')]
+    },
+    {
+      accountId: 'A016', patientId: 'P016', totalDeposit: 4800, available: 4800, frozen: 0,
+      inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'NORMAL', settlement: null,
+      flows: [flow('F0092', dt(0, 8, 55, 12), 'DEPOSIT', 4800, 4800, '门诊缴存日间手术专项储值金', '王芳')]
     }
   ]
 }
@@ -305,6 +462,63 @@ export function seedApplies() {
       diagnosis: '右腕背腱鞘囊肿', applyDoctor: '周立', applyTime: dt(-1, 15, 40), note: '',
       status: 'VOIDED', returnReason: '患者取消手术', returnNote: '',
       returnAt: dt(0, 8, 50), returnBy: '张海涛'
+    },
+    /* ---- 术前评估演示患者的申请单（已建档，供储值金冻结关联申请单号使用） ---- */
+    {
+      ...base, applyId: 'APL014', applyNo: 'APL20261104014', patientId: 'P009', patientName: '邓文华',
+      gender: '男', age: 52, inpatientNo: 'D2026016', bizMode: '手术麻醉',
+      surgeryName: '肩关节镜下肩袖修补术', surgeryCode: '83.6300', plannedSurgeryDate: d(3),
+      surgeon: '张海涛', antiCoagulant: false, antiCoagStopDate: '', applyDept: '关节外科门诊',
+      diagnosis: '右肩袖全层撕裂（冈上肌）', applyDoctor: '张海涛', applyTime: dt(-5, 9, 30), note: ''
+    },
+    {
+      ...base, applyId: 'APL015', applyNo: 'APL20261104015', patientId: 'P010', patientName: '邱美兰',
+      gender: '女', age: 44, inpatientNo: 'D2026017', bizMode: '手术麻醉',
+      surgeryName: '髋关节镜下关节清理术', surgeryCode: '80.8600', plannedSurgeryDate: d(4),
+      surgeon: '周立', antiCoagulant: false, antiCoagStopDate: '', applyDept: '运动医学科门诊',
+      diagnosis: '右髋关节游离体（陈旧性损伤）', applyDoctor: '周立', applyTime: dt(-4, 10, 12), note: ''
+    },
+    {
+      ...base, applyId: 'APL016', applyNo: 'APL20261104016', patientId: 'P011', patientName: '谭志刚',
+      gender: '男', age: 61, inpatientNo: 'D2026018', bizMode: '手术麻醉',
+      surgeryName: '椎间孔镜下髓核摘除术', surgeryCode: '80.5100', plannedSurgeryDate: d(2),
+      surgeon: '李伟', antiCoagulant: false, antiCoagStopDate: '', applyDept: '脊柱外科门诊',
+      diagnosis: '腰 4/5 椎间盘突出症（左侧）', applyDoctor: '李伟', applyTime: dt(-4, 15, 20), note: ''
+    },
+    {
+      ...base, applyId: 'APL017', applyNo: 'APL20261104017', patientId: 'P012', patientName: '毛雪梅',
+      gender: '女', age: 38, inpatientNo: 'D2026019', bizMode: '手术不麻醉',
+      surgeryName: '腕管切开减压术', surgeryCode: '04.4300', plannedSurgeryDate: d(1),
+      surgeon: '周立', antiCoagulant: false, antiCoagStopDate: '', applyDept: '手外科门诊',
+      diagnosis: '左腕管综合征（中度）', applyDoctor: '周立', applyTime: dt(-3, 11, 45), note: ''
+    },
+    {
+      ...base, applyId: 'APL018', applyNo: 'APL20261103018', patientId: 'P013', patientName: '卢长海',
+      gender: '男', age: 66, inpatientNo: 'D2026020', bizMode: '手术麻醉',
+      surgeryName: '骨折内固定取出术', surgeryCode: '78.6300', plannedSurgeryDate: d(-1),
+      surgeon: '张海涛', antiCoagulant: false, antiCoagStopDate: '', applyDept: '创伤骨科门诊',
+      diagnosis: '左股骨骨折术后（内固定存留）', applyDoctor: '张海涛', applyTime: dt(-6, 9, 15), note: ''
+    },
+    {
+      ...base, applyId: 'APL019', applyNo: 'APL20261103019', patientId: 'P014', patientName: '尹春燕',
+      gender: '女', age: 49, inpatientNo: 'D2026021', bizMode: '手术麻醉',
+      surgeryName: '拇外翻截骨矫形术', surgeryCode: '77.5100', plannedSurgeryDate: d(-2),
+      surgeon: '张海涛', antiCoagulant: false, antiCoagStopDate: '', applyDept: '足踝外科门诊',
+      diagnosis: '右足踇外翻（中度）', applyDoctor: '张海涛', applyTime: dt(-7, 14, 5), note: ''
+    },
+    {
+      ...base, applyId: 'APL020', applyNo: 'APL20261105020', patientId: 'P015', patientName: '段志伟',
+      gender: '男', age: 57, inpatientNo: 'D2026022', bizMode: '手术麻醉',
+      surgeryName: '膝关节镜下半月板成形术', surgeryCode: '80.6001', plannedSurgeryDate: d(5),
+      surgeon: '张海涛', antiCoagulant: false, antiCoagStopDate: '', applyDept: '关节外科门诊',
+      diagnosis: '左膝内侧半月板损伤（Ⅱ级）', applyDoctor: '张海涛', applyTime: dt(-2, 9, 25), note: ''
+    },
+    {
+      ...base, applyId: 'APL021', applyNo: 'APL20261105021', patientId: 'P016', patientName: '施文娟',
+      gender: '女', age: 41, inpatientNo: 'D2026023', bizMode: '手术麻醉',
+      surgeryName: '肩关节镜下肩峰成形术', surgeryCode: '81.8300', plannedSurgeryDate: d(6),
+      surgeon: '周立', antiCoagulant: false, antiCoagStopDate: '', applyDept: '运动医学科门诊',
+      diagnosis: '右肩峰下撞击综合征', applyDoctor: '周立', applyTime: dt(-1, 16, 40), note: ''
     }
   ]
 }
@@ -351,7 +565,22 @@ export function seedEvals() {
     { ...base, evalId: 'EVL006', patientId: 'P004', type: 'ANESTHESIA', conclusion: 'PASSED', asa: 'ASA II', anesthesiaMethod: '神经阻滞', riskNote: '超声引导下肌间沟臂丛阻滞，备全麻', doctor: '罗建平', time: dt(-2, 15, 10) },
     { ...base, evalId: 'EVL007', patientId: 'P008', type: 'SPECIALIST', conclusion: 'FAILED', reason: '凝血功能异常', reasonNote: 'INR 1.82，停用利伐沙班不足 7 天，不符合日间手术准入标准', doctor: '张海涛', time: dt(-2, 9, 40) },
     { ...base, evalId: 'EVL008', patientId: 'P005', type: 'SPECIALIST', conclusion: 'PASSED', doctor: '周立', time: dt(-3, 9, 10) },
-    { ...base, evalId: 'EVL009', patientId: 'P005', type: 'ANESTHESIA', conclusion: 'PASSED', asa: 'ASA I', anesthesiaMethod: '局部浸润麻醉', riskNote: '局部浸润麻醉，无需禁食', doctor: '罗建平', time: dt(-3, 9, 50) }
+    { ...base, evalId: 'EVL009', patientId: 'P005', type: 'ANESTHESIA', conclusion: 'PASSED', asa: 'ASA I', anesthesiaMethod: '局部浸润麻醉', riskNote: '局部浸润麻醉，无需禁食', doctor: '罗建平', time: dt(-3, 9, 50) },
+    // 待麻醉评估：专科已通过、麻醉未出结论
+    { ...base, evalId: 'EVL010', patientId: 'P011', type: 'SPECIALIST', conclusion: 'PASSED', opinion: '术前检查未见异常，关节活动度可，同意手术', doctor: '李伟', time: dt(-2, 9, 20) },
+    { ...base, evalId: 'EVL011', patientId: 'P012', type: 'SPECIALIST', conclusion: 'PASSED', opinion: '神经传导检查提示中度压迫，限期手术', doctor: '周立', time: dt(-1, 10, 5) },
+    // 评估不通过：专科不通过 / 麻醉不通过
+    {
+      ...base, evalId: 'EVL012', patientId: 'P013', type: 'SPECIALIST', conclusion: 'FAILED',
+      reason: '感染未控制', reasonNote: '切口区红肿渗液，CRP 68mg/L，感染未控制，不符合日间手术准入标准',
+      doctor: '张海涛', time: dt(-1, 9, 40)
+    },
+    { ...base, evalId: 'EVL013', patientId: 'P014', type: 'SPECIALIST', conclusion: 'PASSED', doctor: '张海涛', time: dt(-2, 10, 15) },
+    {
+      ...base, evalId: 'EVL014', patientId: 'P014', type: 'ANESTHESIA', conclusion: 'FAILED',
+      reason: '心肺功能不全', reasonNote: '活动后气促，肺功能 FEV1 低于预计值 60%，ASA IV 级，不宜日间手术',
+      doctor: '罗建平', time: dt(-1, 15, 10)
+    }
   ]
 }
 
@@ -602,7 +831,7 @@ const REPORT_TEXT = {
 }
 
 export function seedExams(patientId) {
-  const later = patientId === 'P002'
+  const later = REPORT_PENDING_PATIENTS.includes(patientId)
   return [
     {
       examId: 'EX' + patientId + '1', name: '血常规', type: '检验', bookStatus: '已完成',
@@ -710,7 +939,62 @@ export function seedLogs() {
     mkLog(19, dt(-1, 15, 40, 8), '陈静', '护士', 'APL', '手术申请', 'CREATE', '申请单', 'APL20261104013', '徐国强 D2026015', null,
       null, { 申请单号: 'APL20261104013', 业务模式: '手术不麻醉' }, '接收 HIS 日间手术申请单'),
     mkLog(20, dt(0, 8, 50, 17), '张海涛', '医生', 'APL', '手术申请', 'VOID', '申请单', 'APL20261104013', '徐国强 D2026015', null,
-      { 申请单状态: '待建档' }, { 申请单状态: '已退回', 退回原因: '患者取消手术' }, '患者取消手术')
+      { 申请单状态: '待建档' }, { 申请单状态: '已退回', 退回原因: '患者取消手术' }, '患者取消手术'),
+    /* ---- 术前评估演示患者留痕：每种列表状态都有对应操作记录 ---- */
+    // 邓文华 P009：待专科评估（接收 → 建档 → 缴存）
+    mkLog(21, dt(-5, 9, 30, 12), '陈静', '护士', 'APL', '手术申请', 'CREATE', '申请单', 'APL20261104014', '邓文华 D2026016', 'P009',
+      null, { 申请单号: 'APL20261104014', 业务模式: '手术麻醉' }, '接收 HIS 日间手术申请单'),
+    mkLog(22, dt(-5, 10, 2, 40), '陈静', '护士', 'BAS', '工作台', 'CREATE', '患者', 'D2026016', '邓文华 D2026016', 'P009',
+      null, { 住院号: 'D2026016', 患者状态: '术前准备' }, '从申请单 APL20261104014 建档'),
+    mkLog(23, dt(-3, 9, 20, 18), '王芳', '收费员', 'DEP', '储值金管理', 'CREATE', '储值金流水', 'F0081', '邓文华 D2026016', 'P009',
+      null, { 发生金额: '6,000.00', 业务类型: '缴存' }, '门诊缴存日间手术专项储值金'),
+    // 邱美兰 P010：待专科评估
+    mkLog(24, dt(-4, 10, 12, 5), '陈静', '护士', 'APL', '手术申请', 'CREATE', '申请单', 'APL20261104015', '邱美兰 D2026017', 'P010',
+      null, { 申请单号: 'APL20261104015', 业务模式: '手术麻醉' }, '接收 HIS 日间手术申请单'),
+    mkLog(25, dt(-4, 10, 40, 33), '陈静', '护士', 'BAS', '工作台', 'CREATE', '患者', 'D2026017', '邱美兰 D2026017', 'P010',
+      null, { 住院号: 'D2026017', 患者状态: '术前准备' }, '从申请单 APL20261104015 建档'),
+    // 谭志刚 P011：待麻醉评估（专科评估已提交）
+    mkLog(26, dt(-4, 15, 20, 9), '陈静', '护士', 'APL', '手术申请', 'CREATE', '申请单', 'APL20261104016', '谭志刚 D2026018', 'P011',
+      null, { 申请单号: 'APL20261104016', 业务模式: '手术麻醉' }, '接收 HIS 日间手术申请单'),
+    mkLog(27, dt(-4, 16, 5, 26), '陈静', '护士', 'BAS', '工作台', 'CREATE', '患者', 'D2026018', '谭志刚 D2026018', 'P011',
+      null, { 住院号: 'D2026018', 患者状态: '术前准备' }, '从申请单 APL20261104016 建档'),
+    mkLog(28, dt(-2, 9, 20, 14), '李伟', '医生', 'EVL', '术前评估', 'CREATE', '术前评估', 'EVL010', '谭志刚 专科评估', 'P011',
+      { 专科评估: '待评估' }, { 结论: '通过', 评估类型: '专科评估' }, '术前检查未见异常，关节活动度可，同意手术'),
+    // 毛雪梅 P012：待麻醉评估
+    mkLog(29, dt(-3, 11, 45, 30), '陈静', '护士', 'APL', '手术申请', 'CREATE', '申请单', 'APL20261104017', '毛雪梅 D2026019', 'P012',
+      null, { 申请单号: 'APL20261104017', 业务模式: '手术不麻醉' }, '接收 HIS 日间手术申请单'),
+    mkLog(30, dt(-3, 12, 10, 2), '陈静', '护士', 'BAS', '工作台', 'CREATE', '患者', 'D2026019', '毛雪梅 D2026019', 'P012',
+      null, { 住院号: 'D2026019', 患者状态: '术前准备' }, '从申请单 APL20261104017 建档'),
+    mkLog(31, dt(-1, 10, 5, 47), '周立', '医生', 'EVL', '术前评估', 'CREATE', '术前评估', 'EVL011', '毛雪梅 专科评估', 'P012',
+      { 专科评估: '待评估' }, { 结论: '通过', 评估类型: '专科评估' }, '神经传导检查提示中度压迫，限期手术'),
+    // 卢长海 P013：评估不通过（专科），等待自动退出
+    mkLog(32, dt(-6, 9, 15, 22), '陈静', '护士', 'APL', '手术申请', 'CREATE', '申请单', 'APL20261103018', '卢长海 D2026020', 'P013',
+      null, { 申请单号: 'APL20261103018', 业务模式: '手术麻醉' }, '接收 HIS 日间手术申请单'),
+    mkLog(33, dt(-6, 9, 50, 11), '陈静', '护士', 'BAS', '工作台', 'CREATE', '患者', 'D2026020', '卢长海 D2026020', 'P013',
+      null, { 住院号: 'D2026020', 患者状态: '术前准备' }, '从申请单 APL20261103018 建档'),
+    mkLog(34, dt(-1, 9, 40, 55), '张海涛', '医生', 'EVL', '术前评估', 'CREATE', '术前评估', 'EVL012', '卢长海 专科评估', 'P013',
+      { 专科评估: '待评估' }, { 结论: '不通过', 评估类型: '专科评估', 未通过原因: '感染未控制' }, '切口区红肿渗液，CRP 68mg/L，感染未控制，不符合日间手术准入标准'),
+    // 尹春燕 P014：评估不通过（麻醉）→ 已自动退出
+    mkLog(35, dt(-7, 14, 5, 33), '陈静', '护士', 'APL', '手术申请', 'CREATE', '申请单', 'APL20261103019', '尹春燕 D2026021', 'P014',
+      null, { 申请单号: 'APL20261103019', 业务模式: '手术麻醉' }, '接收 HIS 日间手术申请单'),
+    mkLog(36, dt(-7, 14, 40, 18), '陈静', '护士', 'BAS', '工作台', 'CREATE', '患者', 'D2026021', '尹春燕 D2026021', 'P014',
+      null, { 住院号: 'D2026021', 患者状态: '术前准备' }, '从申请单 APL20261103019 建档'),
+    mkLog(37, dt(-2, 10, 15, 26), '张海涛', '医生', 'EVL', '术前评估', 'CREATE', '术前评估', 'EVL013', '尹春燕 专科评估', 'P014',
+      { 专科评估: '待评估' }, { 结论: '通过', 评估类型: '专科评估' }, '术前检查报告齐全，准予进入日间手术流程'),
+    mkLog(38, dt(-1, 15, 10, 3), '罗建平', '医生', 'EVL', '术前评估', 'CREATE', '术前评估', 'EVL014', '尹春燕 麻醉评估', 'P014',
+      { 麻醉评估: '待评估' }, { 结论: '不通过', 评估类型: '麻醉评估', 未通过原因: '心肺功能不全' }, '活动后气促，肺功能 FEV1 低于预计值 60%，ASA IV 级，不宜日间手术'),
+    mkLog(39, dt(-1, 15, 30, 12), '张海涛', '医生', 'DEP', '储值金管理', 'STATUS', '门诊结算单', 'JSM20261104002', '尹春燕 D2026021', 'P014',
+      { 可用余额: '¥0.00', 冻结金额: '¥5,200.00' }, { 账户状态: '已结算', 退回金额: '4,640.00' }, '退出日间手术：评估不通过（麻醉评估不通过）'),
+    // 段志伟 P015：报告未完成
+    mkLog(40, dt(-2, 9, 25, 44), '陈静', '护士', 'APL', '手术申请', 'CREATE', '申请单', 'APL20261105020', '段志伟 D2026022', 'P015',
+      null, { 申请单号: 'APL20261105020', 业务模式: '手术麻醉' }, '接收 HIS 日间手术申请单'),
+    mkLog(41, dt(-2, 10, 5, 16), '陈静', '护士', 'BAS', '工作台', 'CREATE', '患者', 'D2026022', '段志伟 D2026022', 'P015',
+      null, { 住院号: 'D2026022', 患者状态: '术前准备' }, '从申请单 APL20261105020 建档'),
+    // 施文娟 P016：报告未完成
+    mkLog(42, dt(-1, 16, 40, 9), '陈静', '护士', 'APL', '手术申请', 'CREATE', '申请单', 'APL20261105021', '施文娟 D2026023', 'P016',
+      null, { 申请单号: 'APL20261105021', 业务模式: '手术麻醉' }, '接收 HIS 日间手术申请单'),
+    mkLog(43, dt(-1, 17, 5, 37), '陈静', '护士', 'BAS', '工作台', 'CREATE', '患者', 'D2026023', '施文娟 D2026023', 'P016',
+      null, { 住院号: 'D2026023', 患者状态: '术前准备' }, '从申请单 APL20261105021 建档')
   ]
 }
 
