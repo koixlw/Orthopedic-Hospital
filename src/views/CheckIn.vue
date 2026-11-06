@@ -133,18 +133,34 @@
 
     <ReportDrawer v-model="oneDlg" :report="oneReport" />
 
-    <el-dialog v-model="historyDlg" title="既往报到记录" width="560px">
+    <el-dialog v-model="historyDlg" title="既往报到记录" width="790px">
+      <div v-if="history.length" class="notice-bar">
+        <el-icon><InfoFilled /></el-icon>
+        共 {{ history.length }} 条报到记录，报到后不可修改；如需撤回请使用「取消报到」，记录保留并标记为已取消。
+      </div>
       <el-table :data="history" size="small" border>
-        <el-table-column prop="checkinId" label="报到号" width="100" />
-        <el-table-column prop="time" label="报到时间" width="160" />
-        <el-table-column prop="method" label="报到方式" width="110" />
-        <el-table-column prop="operator" label="操作员" width="80" />
-        <el-table-column label="状态" width="90">
+        <el-table-column prop="checkInId" label="报到号" width="104">
+          <template #default="{ row }"><span class="mono">{{ row.checkInId }}</span></template>
+        </el-table-column>
+        <el-table-column label="报到时间" width="150">
+          <template #default="{ row }"><span class="num">{{ (row.checkInTime || '').slice(0, 16) }}</span></template>
+        </el-table-column>
+        <el-table-column prop="checkInMethod" label="报到方式" width="140" />
+        <el-table-column prop="checkInBy" label="操作员" width="80" />
+        <el-table-column label="知情同意书" width="106" align="center">
           <template #default="{ row }">
-            <el-tag size="small" :type="row.cancelled ? 'info' : 'success'">{{ row.cancelled ? '已取消' : '有效' }}</el-tag>
+            <span :class="row.printConsent ? '' : 'muted'">{{ row.printConsent ? '已打印' : '未打印' }}</span>
           </template>
         </el-table-column>
-        <template #empty><div class="empty">暂无报到记录</div></template>
+        <el-table-column label="状态" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.voided ? 'info' : 'success'">{{ row.voided ? '已取消' : '有效' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="取消原因" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.voidReason || '—' }}</template>
+        </el-table-column>
+        <template #empty><div class="empty">暂无数据</div></template>
       </el-table>
     </el-dialog>
   </div>
@@ -169,6 +185,8 @@ const route = useRoute()
 const router = useRouter()
 const keyword = ref('')
 const pid = ref(route.query.patient || '')
+// 报到方式：扫码 / 刷卡 / 手工输入，写入报到记录并可回溯
+const checkInMethod = ref('手工输入住院号')
 const reportDlg = ref(false)
 const oneDlg = ref(false)
 const oneReport = ref(null)
@@ -202,6 +220,7 @@ function doQuery() {
   const p = state.patients.find((x) => x.inpatientNo === kw) ||
     state.patients.find((x) => state.applies.some((a) => a.patientId === x.patientId && a.applyNo === kw))
   if (!p) return ElMessage.error('未找到该住院号对应的日间手术患者，请确认住院号或扫描申请单条码')
+  checkInMethod.value = '手工输入住院号'
   pid.value = p.patientId
   loadExams(p.patientId)
 }
@@ -216,6 +235,7 @@ function mockScan() {
   if (!s) return ElMessage.warning('今日没有待报到患者')
   const p = getPatient(s.patientId)
   keyword.value = p.inpatientNo
+  checkInMethod.value = '扫申请单条码'
   pid.value = p.patientId
   loadExams(p.patientId)
   ElMessage.success(`已扫描申请单条码：${p.name} ${p.inpatientNo}`)
@@ -226,6 +246,7 @@ function mockCard() {
   if (!s) return ElMessage.warning('今日没有待报到患者')
   const p = getPatient(s.patientId)
   keyword.value = p.inpatientNo
+  checkInMethod.value = '刷医保卡 / 就诊卡'
   pid.value = p.patientId
   loadExams(p.patientId)
   ElMessage.success(`已读取就诊卡：${p.name} ${p.inpatientNo}`)
@@ -234,6 +255,7 @@ function mockCard() {
 function pick(s) {
   const p = getPatient(s.patientId)
   keyword.value = p.inpatientNo
+  checkInMethod.value = '手工输入住院号'
   pid.value = p.patientId
   loadExams(p.patientId)
 }
@@ -271,12 +293,12 @@ function openHistory() {
 function doCheckIn() {
   if (!allOk.value) return ElMessage.error('报到条件不满足，不能报到')
   ElMessageBox.confirm(
-    `确认患者${patient.value.name}（${patient.value.inpatientNo}）报到？报到后状态变更为术中，不可撤销；如需撤回请使用「取消报到」。`,
+    `确认患者${patient.value.name}（${patient.value.inpatientNo}）报到？报到方式：${checkInMethod.value}。报到后状态变更为术中，不可撤销；如需撤回请使用「取消报到」。`,
     '确认报到', { type: 'warning', confirmButtonText: '确认报到', cancelButtonText: '取消' }
   ).then(() => {
     try {
-      checkInStore(patient.value.patientId, '手工输入住院号')
-      ElMessage.success('报到成功，患者状态已变更为「术中」')
+      checkInStore(patient.value.patientId, checkInMethod.value)
+      ElMessage.success('报到成功，患者状态已变更为「术中」，报到记录已留痕')
     } catch (e) { ElMessage.error(e.message) }
   }).catch(() => {})
 }

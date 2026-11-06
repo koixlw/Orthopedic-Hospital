@@ -701,8 +701,43 @@ export function seedSchedules() {
   ]
 }
 
+/* ---------------- 手术报到记录 ---------------- */
 export function seedCheckins() {
-  return []
+  return [
+    {
+      checkInId: 'CIR000001', patientId: 'P005', scheduleId: '',
+      checkInTime: dt(0, 7, 52), checkInMethod: '手工输入住院号', checkInBy: '陈静',
+      guardsSnapshot: [
+        { key: 'schedule', label: '手术预约', ok: true, detail: '已预约 ' + d(0) + ' 日间 1 间 第 1 台' },
+        { key: 'date', label: '手术日期', ok: true, detail: '手术日期为今日' },
+        { key: 'eval', label: '术前评估', ok: true, detail: '专科与麻醉评估均通过' },
+        { key: 'deposit', label: '储值金', ok: true, detail: '储值金已转入住院 ¥4,000.00' }
+      ],
+      printConsent: true, printTime: dt(0, 7, 58), voided: false, voidReason: ''
+    },
+    {
+      checkInId: 'CIR000002', patientId: 'P006', scheduleId: '',
+      checkInTime: dt(-5, 7, 45), checkInMethod: '刷医保卡 / 就诊卡', checkInBy: '陈静',
+      guardsSnapshot: [
+        { key: 'schedule', label: '手术预约', ok: true, detail: '已预约 ' + d(-5) + ' 日间 2 间 第 1 台' },
+        { key: 'date', label: '手术日期', ok: true, detail: '手术日期为当日' },
+        { key: 'eval', label: '术前评估', ok: true, detail: '专科与麻醉评估均通过' },
+        { key: 'deposit', label: '储值金', ok: true, detail: '储值金已转入住院 ¥5,500.00' }
+      ],
+      printConsent: true, printTime: dt(-5, 7, 51), voided: false, voidReason: ''
+    },
+    {
+      checkInId: 'CIR000003', patientId: 'P004', scheduleId: 'SCH00000002',
+      checkInTime: dt(0, 7, 50), checkInMethod: '扫申请单条码', checkInBy: '陈静',
+      guardsSnapshot: [
+        { key: 'schedule', label: '手术预约', ok: true, detail: '已预约 ' + d(0) + ' 日间 3 间 第 1 台' },
+        { key: 'date', label: '手术日期', ok: true, detail: '手术日期为今日' },
+        { key: 'eval', label: '术前评估', ok: true, detail: '专科与麻醉评估均通过' },
+        { key: 'deposit', label: '储值金', ok: true, detail: '储值金已转入住院 ¥5,000.00' }
+      ],
+      printConsent: false, printTime: '', voided: true, voidReason: '患者临时改期，撤回本次报到'
+    }
+  ]
 }
 
 /* ---------------- 通知 ----------------
