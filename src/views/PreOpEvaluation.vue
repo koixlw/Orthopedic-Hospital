@@ -1,6 +1,6 @@
 <template>
   <div v-if="patient">
-    <PatientHeader :patient="patient">
+    <PatientHeader :patient="patient" :show-back="false">
       <template #actions>
         <el-tag :type="EVAL_STATUS[status].type" effect="dark">{{ EVAL_STATUS[status].label }}</el-tag>
         <el-button size="small" :icon="Back" @click="backToList">返回列表</el-button>

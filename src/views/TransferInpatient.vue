@@ -1,17 +1,16 @@
 <template>
   <div v-if="patient">
-    <PatientHeader :patient="patient">
+    <PatientHeader :patient="patient" :show-back="false">
       <template #actions>
-        <el-select v-if="!pinned" v-model="pid" size="small" style="width:210px" @change="switchPatient">
-          <el-option v-for="p in candidates" :key="p.patientId" :label="`${p.name} ${p.inpatientNo}`" :value="p.patientId" />
-        </el-select>
+        <el-tag v-if="patient.transferInfo" size="small" type="warning" effect="dark">已转普通住院</el-tag>
+        <el-button size="small" :icon="Back" @click="backToList">返回患者查询</el-button>
       </template>
     </PatientHeader>
 
     <div class="card">
       <div class="card-head">
         <div class="card-title">转普通住院</div>
-        <div class="card-sub">需录入转住院原因与转住院方式，两项均为必填（招标第 9 项 ▲）</div>
+        <div class="card-sub">需录入转住院原因与转住院方式，两项均为必填（招标第 9 项 ▲）；下方「变更后」随选择实时联动</div>
       </div>
 
       <div class="compare" style="margin-bottom:16px">
@@ -22,6 +21,7 @@
             <div class="k">住院号</div><div class="v mono">{{ patient.inpatientNo }}</div>
             <div class="k">拟手术日</div><div class="v num">{{ patient.plannedSurgeryDate || '—' }}</div>
             <div class="k">当前床位</div><div class="v">{{ patient.bedNo || '—' }}</div>
+            <div class="k">当前状态</div><div class="v">{{ PATIENT_STATUS[patient.status].label }}</div>
           </div>
         </div>
         <div class="arrow"><el-icon><Right /></el-icon></div>
@@ -29,14 +29,19 @@
           <div class="tag">变更后</div>
           <div v-if="patient.transferInfo" class="kv" style="grid-template-columns:86px 1fr">
             <div class="k">患者类型</div><div class="v" style="font-weight:700">普通住院患者</div>
+            <div class="k">转住院原因</div><div class="v">{{ patient.transferInfo.reason }}</div>
             <div class="k">转住院时间</div><div class="v num">{{ (patient.transferInfo.at || '').slice(0, 16) }}</div>
             <div class="k">转住院方式</div><div class="v">{{ patient.transferInfo.method }}</div>
             <div class="k">操作医师</div><div class="v">{{ patient.transferInfo.operator }}</div>
           </div>
-          <div v-else class="kv" style="grid-template-columns:86px 1fr;color:#a8b0bd">
-            <div class="k">患者类型</div><div class="v">普通住院患者</div>
-            <div class="k">转住院时间</div><div class="v">提交后生成</div>
-            <div class="k">转住院方式</div><div class="v">待选择</div>
+          <!-- 未提交：随下拉选择实时联动 -->
+          <div v-else class="kv" style="grid-template-columns:86px 1fr">
+            <div class="k">患者类型</div><div class="v" style="font-weight:700">普通住院患者</div>
+            <div class="k">转住院原因</div>
+            <div class="v" :class="form.reason ? '' : 'muted'">{{ form.reason || '待选择' }}</div>
+            <div class="k">转住院时间</div><div class="v muted">提交后生成</div>
+            <div class="k">转住院方式</div>
+            <div class="v" :class="form.method ? '' : 'muted'">{{ form.method || '待选择' }}</div>
             <div class="k">操作医师</div><div class="v">{{ state.session.name }}</div>
           </div>
         </div>
@@ -56,6 +61,7 @@
           <el-select v-model="form.method" placeholder="请选择转住院方式" style="width:320px">
             <el-option v-for="m in TRANSFER_METHODS" :key="m" :label="m" :value="m" />
           </el-select>
+          <div class="tiny mt8">{{ methodHint }}</div>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.note" type="textarea" :rows="3" maxlength="200" show-word-limit
@@ -128,29 +134,33 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Right, Warning } from '@element-plus/icons-vue'
+import { Right, Warning, Back } from '@element-plus/icons-vue'
 import { state, persist } from '@/store/db'
-import { get as getPatient, patchPatient } from '@/store/patients'
+import { get as getPatient } from '@/store/patients'
 import { goStatus, assertCan } from '@/utils/guard'
 import { log } from '@/store/logs'
-import { TRANSFER_REASONS, TRANSFER_METHODS } from '@/mock/dict'
+import { TRANSFER_REASONS, TRANSFER_METHODS, PATIENT_STATUS } from '@/mock/dict'
 import { fmtTime } from '@/utils/format'
 import PatientHeader from '@/components/PatientHeader.vue'
 
 const route = useRoute()
 const router = useRouter()
-const pinned = ref(!!route.params.patientId)
 const pid = ref(route.params.patientId || '')
 const form = reactive({ reason: '', method: '', reasonNote: '', note: '' })
 const errors = reactive({ reason: '', method: '', reasonNote: '' })
 const editDlg = ref(false)
 const editForm = reactive({ reason: '', method: '', note: '' })
 
-const candidates = computed(() => state.patients.filter((p) => ['ADMITTED', 'IN_SURGERY', 'TRANSFERRED'].includes(p.status)))
-if (!pid.value) pid.value = candidates.value[0]?.patientId || ''
-
 const patient = computed(() => getPatient(pid.value))
 const logs = computed(() => (patient.value?.transferHistory || []).slice().reverse())
+
+// 转住院方式说明：与「变更后」联动，说明选择该方式后的实际动作
+const METHOD_HINTS = {
+  原床转住院: '保留当前日间床位，直接转为普通住院床位，住院费用从住院储值金结算',
+  转科: '转入目标科室住院，需由接收科室安排床位，住院证与费用同步迁移',
+  重新开具住院证: '原住院证作废并重新开具住院证，患者需重新办理入院登记'
+}
+const methodHint = computed(() => (form.method ? METHOD_HINTS[form.method] || '' : '请选择转住院方式'))
 
 watch(patient, (p) => {
   if (!p) return
@@ -160,11 +170,6 @@ watch(patient, (p) => {
     form.note = p.transferInfo.note
   }
 }, { immediate: true })
-
-function switchPatient(id) {
-  pinned.value = true
-  router.replace('/transfer/' + id)
-}
 
 function reset() {
   if (patient.value?.transferInfo) {
@@ -266,5 +271,9 @@ function doCancel() {
     persist()
     ElMessage.success('已撤销转住院，变更记录保留')
   }).catch(() => {})
+}
+
+function backToList() {
+  router.push('/transfer')
 }
 </script>

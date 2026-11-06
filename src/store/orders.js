@@ -50,6 +50,7 @@ export function add(patientId, form = {}) {
     usage: form.usage,
     freq: form.freq,
     startTime: form.startTime,
+    remark: (form.remark || '').trim(),
     doctor: state.session.name,
     isAnesthetic: !!drug.isAnesthetic,
     execStatus: form.type === '长期' ? '执行中' : '未执行',
@@ -67,7 +68,8 @@ export function add(patientId, form = {}) {
     patientId, before: null,
     after: {
       药品: order.drugName, 剂量: order.dose + order.unit, 用法: order.usage,
-      频次: order.freq, 麻醉药: order.isAnesthetic ? '是' : '否'
+      频次: order.freq, 麻醉药: order.isAnesthetic ? '是' : '否',
+      ...(order.remark ? { 备注: order.remark } : {})
     },
     reason: '录入手术医嘱'
   })
@@ -86,15 +88,16 @@ export function patch(orderId, body = {}, reason = '') {
   if (o.execStatus === '已作废') throw new Error('已作废的医嘱不能修改')
   if (body.dose !== undefined && !(Number(body.dose) > 0)) throw new Error('剂量必须大于 0')
 
-  const before = { 剂量: o.dose + o.unit, 用法: o.usage, 频次: o.freq }
+  const before = { 剂量: o.dose + o.unit, 用法: o.usage, 频次: o.freq, ...(o.remark ? { 备注: o.remark } : {}) }
   if (body.dose !== undefined) o.dose = round2(Number(body.dose))
   if (body.usage !== undefined) o.usage = body.usage
   if (body.freq !== undefined) o.freq = body.freq
+  if (body.remark !== undefined) o.remark = String(body.remark).trim()
   log({
     module: 'ORD', page: '手术医嘱', action: 'UPDATE',
     targetType: '医嘱', targetId: o.orderId, targetName: o.drugName + ' ' + o.dose + o.unit,
     patientId: o.patientId, before,
-    after: { 剂量: o.dose + o.unit, 用法: o.usage, 频次: o.freq },
+    after: { 剂量: o.dose + o.unit, 用法: o.usage, 频次: o.freq, ...(o.remark ? { 备注: o.remark } : {}) },
     reason: reason || '修改手术医嘱'
   })
   persist()

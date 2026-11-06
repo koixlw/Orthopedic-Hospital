@@ -18,7 +18,7 @@
       </div>
     </div>
     <div class="ops">
-      <el-button size="small" :icon="Back" @click="goBack">返回</el-button>
+      <el-button v-if="showBack" size="small" :icon="Back" @click="goBack">返回</el-button>
       <slot name="actions" />
     </div>
   </div>
@@ -30,7 +30,11 @@ import { useRouter } from 'vue-router'
 import { Back } from '@element-plus/icons-vue'
 import { PATIENT_STATUS } from '@/mock/dict'
 
-const props = defineProps({ patient: { type: Object, required: true } })
+const props = defineProps({
+  patient: { type: Object, required: true },
+  // 有明确返回目标时由页面自行提供按钮，避免出现两个「返回」
+  showBack: { type: Boolean, default: true }
+})
 const router = useRouter()
 const statusLabel = computed(() => PATIENT_STATUS[props.patient.status]?.label || props.patient.status)
 const statusType = computed(() => PATIENT_STATUS[props.patient.status]?.type || 'info')

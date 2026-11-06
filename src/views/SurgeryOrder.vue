@@ -69,6 +69,10 @@
           <el-date-picker v-model="form.startTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss"
             format="YYYY-MM-DD HH:mm" style="width:100%" />
         </div>
+        <div class="fld" style="width:150px">
+          <div class="lb">备注（选填）</div>
+          <el-input v-model="form.remark" maxlength="50" placeholder="如：术中分次给药" clearable />
+        </div>
         <div class="fld" style="width:96px">
           <div class="lb">&nbsp;</div>
           <el-button v-if="can('ord.add')" type="primary" style="width:100%" @click="doAdd">添加医嘱</el-button>
@@ -122,6 +126,12 @@
         <el-table-column label="开始时间" width="132">
           <template #default="{ row }"><span class="num">{{ (row.startTime || '').slice(0, 16) }}</span></template>
         </el-table-column>
+        <el-table-column label="备注" min-width="130" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.remark" class="tiny" :title="row.remark">{{ row.remark }}</span>
+            <span v-else class="tiny muted">—</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="doctor" label="开嘱医师" width="72" />
         <el-table-column label="状态" width="92" align="center">
           <template #default="{ row }">
@@ -172,6 +182,7 @@
         <div class="section-h">医嘱录入规则</div>
         <div class="rule-list">
           <div><b>临时医嘱</b>一次执行，不可停嘱；<b>长期医嘱</b>可停嘱，停嘱后保留记录与停嘱时间。</div>
+        <div>每条医嘱可填写<b>备注</b>（录入时选填，执行中可在「修改」里补充），用于记录术中特殊交代。</div>
           <div>已执行医嘱不能修改，只能<b>作废</b>；作废后灰显保留，可追溯。</div>
           <div>移除仅对未执行医嘱生效，被移除的记录可用「显示已移除」查看并<b>恢复</b>。</div>
           <div>每一次录入、修改、停嘱、作废都会写入操作日志，含操作人与时间。</div>
@@ -195,6 +206,10 @@
             <el-select v-model="editForm.freq" style="width:100%">
               <el-option v-for="f in FREQS" :key="f" :label="f" :value="f" />
             </el-select>
+          </el-form-item>
+          <el-form-item label="备注">
+            <el-input v-model="editForm.remark" type="textarea" :rows="2" maxlength="100" show-word-limit
+              placeholder="记录特殊交代事项，如：术中分次给药、需心电监护" />
           </el-form-item>
         </el-form>
       </template>
@@ -233,12 +248,12 @@ const filter = reactive({ type: '', anes: '', status: '', kw: '' })
 const showRemoved = ref(false)
 const editDlg = ref(false)
 const editRow = ref(null)
-const editForm = reactive({ dose: 0, usage: '', freq: '' })
+const editForm = reactive({ dose: 0, usage: '', freq: '', remark: '' })
 const drugKw = ref('')
 
 const form = reactive({
   type: '临时', drugCode: '', drugName: '', spec: '', dose: 0, unit: '',
-  usage: '', freq: '一次', startTime: dayjs().format('YYYY-MM-DD HH:mm:ss'), isAnesthetic: false
+  usage: '', freq: '一次', startTime: dayjs().format('YYYY-MM-DD HH:mm:ss'), remark: '', isAnesthetic: false
 })
 
 const patient = computed(() => (route.params.patientId ? getPatient(route.params.patientId) : null))
@@ -285,6 +300,7 @@ function doAdd() {
     form.spec = ''
     form.unit = ''
     form.usage = ''
+    form.remark = ''
   } catch (e) { ElMessage.error(e.message) }
 }
 
@@ -294,13 +310,13 @@ function stTag(row) {
 
 function openEdit(row) {
   editRow.value = row
-  Object.assign(editForm, { dose: row.dose, usage: row.usage, freq: row.freq })
+  Object.assign(editForm, { dose: row.dose, usage: row.usage, freq: row.freq, remark: row.remark || '' })
   editDlg.value = true
 }
 
 function saveEdit() {
   try {
-    ord.patch(editRow.value.orderId, { dose: editForm.dose, usage: editForm.usage, freq: editForm.freq }, '调整医嘱剂量与用法')
+    ord.patch(editRow.value.orderId, { dose: editForm.dose, usage: editForm.usage, freq: editForm.freq, remark: editForm.remark }, '调整医嘱剂量、用法或备注')
     editDlg.value = false
     ElMessage.success('医嘱已更新')
   } catch (e) { ElMessage.error(e.message) }
