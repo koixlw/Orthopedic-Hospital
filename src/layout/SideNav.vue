@@ -32,8 +32,7 @@
 import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { state, resetAll } from '@/store/db'
-import { listByStatus } from '@/store/evals'
+import { resetAll } from '@/store/db'
 import { can } from '@/store/session'
 import { poolCount, refreshPoolCount } from '@/store/his'
 import { NAV_GROUPS } from './nav'
@@ -45,12 +44,9 @@ const groups = computed(() => NAV_GROUPS
   .map((g) => ({ ...g, items: g.items.filter((it) => can(it.perm)) }))
   .filter((g) => g.items.length))
 
+// 侧栏只有「日间手术申请」带角标：HIS 待接收申请单数（与页面「接收 HIS 申请单」按钮角标同源）
 const counts = computed(() => ({
-  // 「日间手术申请」角标与页面「接收 HIS 申请单」按钮角标同源：HIS 待接收申请单数
-  apply: can('apply.receive') ? poolCount.value : '',
-  // 待评估 = 报告未完成 + 待专科评估 + 待麻醉评估
-  eval: listByStatus('REPORT_PENDING').length + listByStatus('SPECIALIST_PENDING').length + listByStatus('ANESTHESIA_PENDING').length,
-  checkin: state.patients.filter((p) => p.status === 'ADMITTED').length
+  apply: can('apply.receive') ? poolCount.value : ''
 }))
 
 // 进页面就取一次 HIS 待接收数量；接收申请单后由申请页刷新，两处角标同步变化

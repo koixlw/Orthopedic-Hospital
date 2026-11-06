@@ -26,6 +26,7 @@
           <el-radio-button label="临时">临时医嘱</el-radio-button>
           <el-radio-button label="长期">长期医嘱</el-radio-button>
         </el-radio-group>
+        <el-checkbox v-model="form.isVerbal" label="口头医嘱" style="margin-left:12px" />
         <span class="tiny">医嘱类型决定可否停嘱：长期医嘱可停嘱，临时医嘱一次执行</span>
       </div>
 
@@ -79,6 +80,27 @@
         </div>
       </div>
 
+      <!-- 口头医嘱填写框：医师口述、护士复述，复述人与复述时间一并留痕 -->
+      <div v-if="form.isVerbal" class="entry-row verbal-row mt8">
+        <div class="fld" style="width:160px">
+          <div class="lb">复述人</div>
+          <el-input v-model="form.reciter" placeholder="复述护士姓名" />
+        </div>
+        <div class="fld" style="width:190px">
+          <div class="lb">复述时间</div>
+          <el-date-picker v-model="form.reciteTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss"
+            format="YYYY-MM-DD HH:mm" placeholder="选择复述时间" style="width:100%" />
+        </div>
+        <div class="fld" style="flex:1;min-width:220px">
+          <div class="lb">下达情形说明（选填）</div>
+          <el-input v-model="form.verbalNote" maxlength="100" placeholder="如：手术台上口述，无法立即书写" />
+        </div>
+        <div class="fld" style="width:300px">
+          <div class="lb">&nbsp;</div>
+          <div class="tiny" style="line-height:32px">口头医嘱须由护士复述并记录复述人后方可提交</div>
+        </div>
+      </div>
+
       <div class="toolbar mt12">
         <el-select v-model="filter.type" placeholder="类型" clearable size="small" style="width:110px">
           <el-option label="长期医嘱" value="长期" />
@@ -89,6 +111,7 @@
           <el-option label="非麻醉药" value="0" />
         </el-select>
         <el-select v-model="filter.status" placeholder="状态" clearable size="small" style="width:120px">
+          <el-option label="待提交" value="待提交" />
           <el-option label="执行中" value="执行中" />
           <el-option label="已执行" value="已执行" />
           <el-option label="已停止" value="已停止" />
@@ -98,13 +121,27 @@
         <el-switch v-model="showRemoved" size="small" active-text="显示已移除" style="margin-left:auto" />
       </div>
 
+      <div class="flex gap12 mt12" style="justify-content:space-between;align-items:center">
+        <span class="tiny">
+          待提交 <b class="num">{{ pendingCount }}</b> 条 ｜ 已提交 <b class="num">{{ submittedCount }}</b> 条
+          ｜ 麻醉药 <b class="num">{{ anestheticCount }}</b> 条 ｜ 执行中 <b class="num">{{ activeCount }}</b> 条
+          <span class="muted">　新增医嘱先进入「待提交」，确认无误后一次性提交</span>
+        </span>
+        <el-button
+          v-if="can('ord.submit')"
+          type="primary"
+          :disabled="!pendingCount"
+          @click="doSubmitOrders"
+        >一次性提交医嘱（{{ pendingCount }}）</el-button>
+      </div>
+
       <el-table :data="rows" size="small" border style="width:100%" :row-class-name="rowClass">
         <el-table-column label="类型" width="72" align="center">
           <template #default="{ row }">
             <el-tag size="small" :type="row.type === '长期' ? 'primary' : 'info'" effect="plain">{{ row.type }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="药品" min-width="220">
+        <el-table-column label="药品" min-width="200">
           <template #default="{ row }">
             <div class="flex gap6" style="align-items:center;min-width:0">
               <span
@@ -113,6 +150,7 @@
                 :title="row.drugName"
               >{{ row.drugName }}</span>
               <el-tag v-if="row.isAnesthetic" size="small" type="danger" effect="dark" style="flex:none">麻醉</el-tag>
+              <el-tag v-if="row.isVerbal" size="small" type="warning" effect="dark" style="flex:none">口头</el-tag>
               <el-tag v-if="row.removed" size="small" type="info" style="flex:none">已移除</el-tag>
             </div>
           </template>
@@ -125,6 +163,15 @@
         <el-table-column prop="freq" label="频次" width="80" />
         <el-table-column label="开始时间" width="132">
           <template #default="{ row }"><span class="num">{{ (row.startTime || '').slice(0, 16) }}</span></template>
+        </el-table-column>
+        <el-table-column label="口头医嘱复述" width="146">
+          <template #default="{ row }">
+            <template v-if="row.isVerbal">
+              <div>{{ row.reciter || '—' }}</div>
+              <div class="tiny num">{{ (row.reciteTime || '').slice(0, 16) || '—' }}</div>
+            </template>
+            <span v-else class="tiny muted">—</span>
+          </template>
         </el-table-column>
         <el-table-column label="备注" min-width="130" show-overflow-tooltip>
           <template #default="{ row }">
@@ -140,7 +187,11 @@
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <template v-if="row.execStatus === '执行中' && !row.removed">
+            <template v-if="row.execStatus === '待提交' && !row.removed">
+              <el-button v-if="can('ord.add')" link type="primary" size="small" @click="openEdit(row)">修改</el-button>
+              <el-button v-if="can('ord.remove')" link type="danger" size="small" @click="doRemove(row)">移除</el-button>
+            </template>
+            <template v-else-if="row.execStatus === '执行中' && !row.removed">
               <el-button v-if="can('ord.add')" link type="primary" size="small" @click="openEdit(row)">修改</el-button>
               <el-button v-if="row.type === '长期' && can('ord.stop')" link type="warning" size="small" @click="openStop(row)">停嘱</el-button>
               <el-button v-if="can('ord.remove')" link type="danger" size="small" @click="doRemove(row)">移除</el-button>
@@ -181,6 +232,8 @@
       <div class="card">
         <div class="section-h">医嘱录入规则</div>
         <div class="rule-list">
+          <div>新增医嘱先落为<b>待提交</b>记录，可在操作栏移除；确认无误后点击「一次性提交医嘱」全部提交。</div>
+          <div><b>口头医嘱</b>须由护士复述并记录复述人与复述时间，未填复述信息不能提交。</div>
           <div><b>临时医嘱</b>一次执行，不可停嘱；<b>长期医嘱</b>可停嘱，停嘱后保留记录与停嘱时间。</div>
         <div>每条医嘱可填写<b>备注</b>（录入时选填，执行中可在「修改」里补充），用于记录术中特殊交代。</div>
           <div>已执行医嘱不能修改，只能<b>作废</b>；作废后灰显保留，可追溯。</div>
@@ -253,7 +306,9 @@ const drugKw = ref('')
 
 const form = reactive({
   type: '临时', drugCode: '', drugName: '', spec: '', dose: 0, unit: '',
-  usage: '', freq: '一次', startTime: dayjs().format('YYYY-MM-DD HH:mm:ss'), remark: '', isAnesthetic: false
+  usage: '', freq: '一次', startTime: dayjs().format('YYYY-MM-DD HH:mm:ss'), remark: '', isAnesthetic: false,
+  // 口头医嘱：勾选后须填复述人与复述时间
+  isVerbal: false, reciter: '', reciteTime: '', verbalNote: ''
 })
 
 const patient = computed(() => (route.params.patientId ? getPatient(route.params.patientId) : null))
@@ -267,6 +322,9 @@ const drugOptions = computed(() => state.dicts.drugs.filter((d) => {
 }))
 const anestheticCount = computed(() => list.value.filter((o) => o.isAnesthetic && !o.removed).length)
 const activeCount = computed(() => list.value.filter((o) => o.execStatus === '执行中' && !o.removed).length)
+// 待提交医嘱：新增后先落在这里，确认无误后一次性提交
+const pendingCount = computed(() => list.value.filter((o) => o.execStatus === '待提交' && !o.removed).length)
+const submittedCount = computed(() => list.value.filter((o) => o.execStatus !== '待提交' && !o.removed).length)
 // 麻醉药核对：招标第 13 项要求手术医嘱至少包含术中使用的麻醉药
 const anesRows = computed(() => list.value.filter((o) => o.isAnesthetic && !o.removed && o.execStatus !== '已作废'))
 
@@ -293,7 +351,10 @@ function onDrug(code) {
 function doAdd() {
   try {
     ord.add(patient.value.patientId, { ...form })
-    ElMessage.success(`已添加医嘱：${form.drugName} ${form.dose}${form.unit} ${form.usage}${form.isAnesthetic ? '（麻醉药）' : ''}`)
+    ElMessage.success(
+      `已添加医嘱：${form.drugName} ${form.dose}${form.unit} ${form.usage}` +
+      `${form.isAnesthetic ? '（麻醉药）' : ''}${form.isVerbal ? '（口头医嘱）' : ''}，当前状态「待提交」`
+    )
     form.drugCode = ''
     form.drugName = ''
     form.dose = 0
@@ -301,11 +362,37 @@ function doAdd() {
     form.unit = ''
     form.usage = ''
     form.remark = ''
+    form.isVerbal = false
+    form.reciter = ''
+    form.reciteTime = ''
+    form.verbalNote = ''
   } catch (e) { ElMessage.error(e.message) }
 }
 
+/** 确认无误后一次性提交全部待提交医嘱 */
+function doSubmitOrders() {
+  if (!pendingCount.value) return ElMessage.warning('没有待提交的医嘱')
+  const verbalPending = list.value.filter((o) => o.execStatus === '待提交' && !o.removed && o.isVerbal)
+  const missingReciter = verbalPending.filter((o) => !o.reciter || !o.reciteTime)
+  if (missingReciter.length) {
+    return ElMessage.warning(`有 ${missingReciter.length} 条口头医嘱未填写复述人或复述时间，不能提交`)
+  }
+  const tip = anesRows.value.length
+    ? ''
+    : '　注意：本次提交的医嘱中没有麻醉药，招标第 13 项要求手术医嘱至少包含术中使用的麻醉药。'
+  ElMessageBox.confirm(
+    `确认提交当前 ${pendingCount.value} 条待提交医嘱？提交后医嘱正式生效，不能再直接移除。${tip}`,
+    '一次性提交手术医嘱', { type: 'warning', confirmButtonText: '确认提交', cancelButtonText: '再检查一下' }
+  ).then(() => {
+    try {
+      const list2 = ord.submitPending(patient.value.patientId)
+      ElMessage.success(`已一次性提交 ${list2.length} 条手术医嘱`)
+    } catch (e) { ElMessage.error(e.message) }
+  }).catch(() => {})
+}
+
 function stTag(row) {
-  return { 执行中: 'success', 已执行: 'primary', 已停止: 'info', 已作废: 'info' }[row.execStatus] || 'info'
+  return { 待提交: 'warning', 执行中: 'success', 已执行: 'primary', 已停止: 'info', 已作废: 'info' }[row.execStatus] || 'info'
 }
 
 function openEdit(row) {
@@ -377,4 +464,6 @@ function rowClass({ row }) {
 .entry-row .fld { min-width: 0; }
 .rule-list { display: grid; gap: 7px; font-size: 12.5px; color: var(--ink-2); line-height: 1.65; }
 .rule-list b { color: var(--ink); font-weight: 600; }
+/* 口头医嘱填写区：与普通录入区区分，提示这是复述留痕 */
+.verbal-row { background: #fffaf0; border-color: #f0d9a8; }
 </style>

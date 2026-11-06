@@ -7,10 +7,15 @@ import { log } from './logs'
 import { get as getPatient } from './patients'
 import { fmtTime, round2 } from '@/utils/format'
 
-export const ORDER_STATUS = ['未执行', '执行中', '已执行', '已停止', '已作废']
+export const ORDER_STATUS = ['待提交', '未执行', '执行中', '已执行', '已停止', '已作废']
 
 export function listOf(patientId) {
   return state.orders.filter((o) => o.patientId === patientId)
+}
+
+/** 待提交医嘱：录入后先落到待提交状态，确认无误再一次性提交 */
+export function pendingOf(patientId) {
+  return listOf(patientId).filter((o) => o.execStatus === '待提交' && !o.removed)
 }
 
 export function get(orderId) {
@@ -26,7 +31,10 @@ function nextOrderId() {
   return 'ORD' + String(state.orders.length + 1).padStart(4, '0')
 }
 
-/* ---------------- FUNC-ORD-001 录入手术医嘱 ---------------- */
+/* ---------------- FUNC-ORD-001 录入手术医嘱 ----------------
+ * 新录医嘱一律进入「待提交」状态，可在操作栏移除；确认无误后一次性提交
+ * 支持口头医嘱：医师口述、护士复述，复述人与复述时间一并留痕
+ */
 export function add(patientId, form = {}) {
   assertCan('ord.add', { module: 'ORD', page: '手术医嘱', action: 'CREATE', label: '录入手术医嘱', targetType: '医嘱' })
   const drug = state.dicts.drugs.find((d) => d.code === form.drugCode)
@@ -37,6 +45,9 @@ export function add(patientId, form = {}) {
   if (!form.usage) throw new Error('请选择用法')
   if (!form.freq) throw new Error('请选择频次')
   if (!form.startTime) throw new Error('请选择开始时间')
+  const isVerbal = !!form.isVerbal
+  if (isVerbal && !String(form.reciter || '').trim()) throw new Error('口头医嘱必须填写复述人')
+  if (isVerbal && !form.reciteTime) throw new Error('口头医嘱必须填写复述时间')
 
   const order = {
     orderId: nextOrderId(),
@@ -53,7 +64,13 @@ export function add(patientId, form = {}) {
     remark: (form.remark || '').trim(),
     doctor: state.session.name,
     isAnesthetic: !!drug.isAnesthetic,
-    execStatus: form.type === '长期' ? '执行中' : '未执行',
+    isVerbal,
+    reciter: isVerbal ? String(form.reciter || '').trim() : '',
+    reciteTime: isVerbal ? form.reciteTime : '',
+    verbalNote: isVerbal ? (form.verbalNote || '').trim() : '',
+    execStatus: '待提交',
+    submittedAt: '',
+    submittedBy: '',
     stopTime: '',
     voidReason: '',
     removed: false,
@@ -69,12 +86,39 @@ export function add(patientId, form = {}) {
     after: {
       药品: order.drugName, 剂量: order.dose + order.unit, 用法: order.usage,
       频次: order.freq, 麻醉药: order.isAnesthetic ? '是' : '否',
+      医嘱类型: isVerbal ? '口头医嘱' : '书面医嘱', 执行状态: '待提交',
+      ...(isVerbal ? { 复述人: order.reciter } : {}),
       ...(order.remark ? { 备注: order.remark } : {})
     },
-    reason: '录入手术医嘱'
+    reason: isVerbal ? '录入口头医嘱（待提交）' : '录入手术医嘱（待提交）'
   })
   persist()
   return order
+}
+
+/* ---------------- FUNC-ORD-002 一次性提交待提交医嘱 ----------------
+ * 记录确认无误后点击提交，一次性把该患者全部待提交医嘱提交下去
+ */
+export function submitPending(patientId) {
+  assertCan('ord.submit', { module: 'ORD', page: '手术医嘱', action: 'STATUS', label: '提交手术医嘱', targetType: '医嘱' })
+  const list = pendingOf(patientId)
+  if (!list.length) throw new Error('没有待提交的医嘱')
+  const at = fmtTime(new Date())
+  const before = { 待提交医嘱数: String(list.length), 执行状态: '待提交' }
+  list.forEach((o) => {
+    o.execStatus = o.type === '长期' ? '执行中' : '未执行'
+    o.submittedAt = at
+    o.submittedBy = state.session.name
+  })
+  log({
+    module: 'ORD', page: '手术医嘱', action: 'STATUS',
+    targetType: '医嘱', targetId: list.map((o) => o.orderId).join('、'),
+    targetName: `${patientLabel(patientId)} ${list.length} 条医嘱`, patientId, before,
+    after: { 提交医嘱数: String(list.length), 提交时间: at, 执行状态: '已提交' },
+    reason: '记录确认无误，一次性提交手术医嘱'
+  })
+  persist()
+  return list
 }
 
 /* ---------------- FUNC-ORD-003 修改医嘱 ---------------- */
@@ -152,6 +196,7 @@ export function stop(orderId, reason) {
   const o = get(orderId)
   if (!o) throw new Error('未找到该医嘱')
   if (o.type !== '长期') throw new Error('只有长期医嘱可以停嘱')
+  if (o.execStatus === '待提交') throw new Error('待提交医嘱尚未执行，直接移除即可')
   if (o.execStatus === '已停止') throw new Error('该医嘱已停嘱，不能重复停嘱')
   if (o.execStatus === '已执行') throw new Error('已执行医嘱只能作废，不能停嘱')
   if (!reason) throw new Error('请填写停止原因')
@@ -174,6 +219,7 @@ export function voidOrder(orderId, reason) {
   assertCan('ord.void', { module: 'ORD', page: '手术医嘱', action: 'VOID', label: '作废医嘱', targetType: '医嘱' })
   const o = get(orderId)
   if (!o) throw new Error('未找到该医嘱')
+  if (o.execStatus === '待提交') throw new Error('待提交医嘱尚未执行，直接移除即可')
   if (o.execStatus === '已作废') throw new Error('该医嘱已作废，不能重复作废')
   if (!reason) throw new Error('请选择作废原因')
   const before = { 执行状态: o.execStatus }

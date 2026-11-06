@@ -1005,17 +1005,20 @@ export function seedOrders() {
     {
       orderId: 'ORD0001', patientId: 'P004', type: '临时', drugCode: 'D0013', drugName: '盐酸罗哌卡因注射液',
       spec: '10ml:100mg', dose: 100, unit: 'mg', usage: '神经阻滞', freq: '一次', startTime: dt(-1, 10, 20),
-      doctor: '张海涛', isAnesthetic: true, execStatus: '已执行', stopTime: '', voidReason: '', removed: false
+      doctor: '张海涛', isAnesthetic: true, isVerbal: false, reciter: '', reciteTime: '',
+      execStatus: '已执行', stopTime: '', voidReason: '', removed: false
     },
     {
       orderId: 'ORD0002', patientId: 'P004', type: '临时', drugCode: 'D0014', drugName: '氨甲环酸注射液',
       spec: '5ml:0.5g', dose: 0.5, unit: 'g', usage: '静滴', freq: '一次', startTime: dt(-1, 10, 25),
-      doctor: '张海涛', isAnesthetic: false, execStatus: '执行中', stopTime: '', voidReason: '', removed: false
+      doctor: '张海涛', isAnesthetic: false, isVerbal: false, reciter: '', reciteTime: '',
+      execStatus: '执行中', stopTime: '', voidReason: '', removed: false
     },
     {
       orderId: 'ORD0003', patientId: 'P004', type: '临时', drugCode: 'D0015', drugName: '注射用帕瑞昔布钠',
       spec: '40mg', dose: 40, unit: 'mg', usage: '静注', freq: 'q12h', startTime: dt(-1, 10, 30),
-      doctor: '张海涛', isAnesthetic: false, execStatus: '执行中', stopTime: '', voidReason: '', removed: false
+      doctor: '张海涛', isAnesthetic: false, isVerbal: false, reciter: '', reciteTime: '',
+      execStatus: '执行中', stopTime: '', voidReason: '', removed: false
     }
   ]
 }

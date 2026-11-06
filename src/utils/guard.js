@@ -121,7 +121,7 @@ export const PERM_LABEL = {
   'chk.confirm': '确认手术报到', 'chk.cancel': '取消报到', 'chk.print': '打印知情同意书',
   'chg.add': '录入手术费用', 'chg.import': '调入费用组套', 'chg.submit': '提交费用单',
   'chg.void': '作废费用单', 'chg.reenter': '重新录入费用',
-  'ord.add': '录入手术医嘱', 'ord.stop': '停止医嘱', 'ord.void': '作废医嘱', 'ord.remove': '移除医嘱',
+  'ord.add': '录入手术医嘱', 'ord.submit': '提交手术医嘱', 'ord.stop': '停止医嘱', 'ord.void': '作废医嘱', 'ord.remove': '移除医嘱',
   'trf.submit': '转普通住院', 'trf.revoke': '撤销转普通住院',
   'dict.edit': '维护基础字典', 'dict.remove': '移除字典项', 'dict.toggle': '启停用字典项',
   'msg.resend': '重发通知', 'msg.send': '执行通知发送任务',
@@ -155,7 +155,7 @@ const GRANTS = {
     'apply.correct', 'apply.return',           // FUNC-APL-002/003 开单医师修正、退回申请单
     'eval.submit',                            // FUNC-EVL-003/004（评估结论不可撤销，无撤销权限）
     'chg.add', 'chg.import', 'chg.submit', 'chg.void', 'chg.reenter', // FUNC-CHG-001~006
-    'ord.add', 'ord.stop', 'ord.void', 'ord.remove',                  // FUNC-ORD-001/003/004/005
+    'ord.add', 'ord.submit', 'ord.stop', 'ord.void', 'ord.remove',    // FUNC-ORD-001/002/003/004/005
     'trf.submit', 'trf.revoke'                 // FUNC-TRF-001/004
   ],
   // 演示需要：管理员全绿，正式系统按岗位分离（README 与系统参数页均有说明）

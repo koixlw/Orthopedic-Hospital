@@ -35,7 +35,7 @@ export const NAV_GROUPS = [
     key: 'clinic', title: '门诊申请阶段', module: 'clinic',
     items: [
       { label: '日间手术申请', path: '/apply', perm: 'apply', icon: 'DocumentAdd', badge: 'apply', hot: true },
-      { label: '术前评估', path: '/evaluation', perm: 'evaluate', icon: 'FirstAidKit', badge: 'eval' }
+      { label: '术前评估', path: '/evaluation', perm: 'evaluate', icon: 'FirstAidKit' }
     ]
   },
   {
@@ -43,7 +43,7 @@ export const NAV_GROUPS = [
     items: [
       { label: '储值金管理', path: '/deposit', perm: 'deposit', icon: 'Wallet' },
       { label: '入院登记', path: '/admission', perm: 'admission', icon: 'OfficeBuilding' },
-      { label: '手术报到', path: '/checkin', perm: 'checkin', icon: 'Postcard', badge: 'checkin' },
+      { label: '手术报到', path: '/checkin', perm: 'checkin', icon: 'Postcard' },
       { label: '转普通入院', path: '/transfer', perm: 'transfer', icon: 'Right' }
     ]
   },
