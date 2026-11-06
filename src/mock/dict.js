@@ -206,7 +206,7 @@ export function seedAccounts() {
 
 /* ---------------- 申请单 ---------------- */
 export function seedApplies() {
-  const base = { status: 'ARCHIVED', removed: false }
+  const base = { status: 'ARCHIVED', removed: false, returnReason: '', returnNote: '', returnAt: '', returnBy: '' }
   return [
     {
       ...base, applyId: 'APL001', applyNo: 'APL20261028001', patientId: 'P001', patientName: '张建国',
@@ -285,6 +285,26 @@ export function seedApplies() {
       surgeryName: '腱鞘囊肿切除术', surgeryCode: '82.2900', plannedSurgeryDate: d(1),
       surgeon: '周立', antiCoagulant: false, antiCoagStopDate: '', applyDept: '手外科门诊',
       diagnosis: '左腕背腱鞘囊肿', applyDoctor: '周立', applyTime: dt(0, 8, 10), note: '', status: 'PENDING'
+    },
+    // 已退回：用于演示「已退回」列表的留痕展示（接收 → 退回两条日志对应）
+    {
+      ...base, applyId: 'APL012', applyNo: 'APL20261103012', patientId: '', patientName: '黄丽华',
+      gender: '女', age: 54, inpatientNo: 'D2026014', bizMode: '手术麻醉',
+      surgeryName: '经皮椎体成形术（PKP）', surgeryCode: '81.6500', plannedSurgeryDate: d(2),
+      surgeon: '李伟', antiCoagulant: false, antiCoagStopDate: '', applyDept: '脊柱外科门诊',
+      diagnosis: '腰 2 椎体骨质疏松性压缩骨折', applyDoctor: '李伟', applyTime: dt(-2, 10, 15), note: '',
+      status: 'VOIDED', returnReason: '开单信息错误',
+      returnNote: '术式编码与手术名称不一致，请重新开单',
+      returnAt: dt(-1, 9, 12), returnBy: '张海涛'
+    },
+    {
+      ...base, applyId: 'APL013', applyNo: 'APL20261104013', patientId: '', patientName: '徐国强',
+      gender: '男', age: 67, inpatientNo: 'D2026015', bizMode: '手术不麻醉',
+      surgeryName: '腱鞘囊肿切除术', surgeryCode: '82.2900', plannedSurgeryDate: d(4),
+      surgeon: '周立', antiCoagulant: false, antiCoagStopDate: '', applyDept: '手外科门诊',
+      diagnosis: '右腕背腱鞘囊肿', applyDoctor: '周立', applyTime: dt(-1, 15, 40), note: '',
+      status: 'VOIDED', returnReason: '患者取消手术', returnNote: '',
+      returnAt: dt(0, 8, 50), returnBy: '张海涛'
     }
   ]
 }
@@ -680,7 +700,17 @@ export function seedLogs() {
     // 张建国（P001）后续两条：入院前提醒 + 术前准备完成，使主路径患者轨迹可追溯 8 个节点
     mkLog(15, dt(-2, 16, 30, 12), '陈静', '护士', 'MSG', '消息通知', 'CREATE', '通知', 'MSG005', '张建国 入院前提醒', 'P001', null, { 类型: '入院前提醒', 渠道: '短信', 内容: '术前 8 小时禁食' }, '按系统参数「入院前提醒天数」自动生成'),
     mkLog(16, dt(-1, 10, 5, 33), '陈静', '护士', 'BAS', '工作台', 'UPDATE', '患者', 'P001', '张建国 D2026001', 'P001',
-      { 患者状态: '已申请' }, { 患者状态: '术前准备', 术前评估: '专科通过 / 麻醉通过' }, '术前检查与评估完成，转入术前准备')
+      { 患者状态: '已申请' }, { 患者状态: '术前准备', 术前评估: '专科通过 / 麻醉通过' }, '术前检查与评估完成，转入术前准备'),
+    // 黄丽华（APL012）：接收 → 退回，留痕齐全，可在「已退回」列表查看
+    mkLog(17, dt(-2, 10, 15, 30), '陈静', '护士', 'APL', '手术申请', 'CREATE', '申请单', 'APL20261103012', '黄丽华 D2026014', null,
+      null, { 申请单号: 'APL20261103012', 业务模式: '手术麻醉' }, '接收 HIS 日间手术申请单'),
+    mkLog(18, dt(-1, 9, 12, 41), '张海涛', '医生', 'APL', '手术申请', 'VOID', '申请单', 'APL20261103012', '黄丽华 D2026014', null,
+      { 申请单状态: '待建档' }, { 申请单状态: '已退回', 退回原因: '开单信息错误' }, '开单信息错误：术式编码与手术名称不一致，请重新开单'),
+    // 徐国强（APL013）：接收 → 退回，留痕齐全
+    mkLog(19, dt(-1, 15, 40, 8), '陈静', '护士', 'APL', '手术申请', 'CREATE', '申请单', 'APL20261104013', '徐国强 D2026015', null,
+      null, { 申请单号: 'APL20261104013', 业务模式: '手术不麻醉' }, '接收 HIS 日间手术申请单'),
+    mkLog(20, dt(0, 8, 50, 17), '张海涛', '医生', 'APL', '手术申请', 'VOID', '申请单', 'APL20261104013', '徐国强 D2026015', null,
+      { 申请单状态: '待建档' }, { 申请单状态: '已退回', 退回原因: '患者取消手术' }, '患者取消手术')
   ]
 }
 

@@ -10,7 +10,14 @@
         <div class="card-title">手术申请单</div>
         <div class="card-sub">接收 HIS 申请单 → 抗凝剂停药校验 → 建档进入术前流程</div>
         <div class="right">
-          <el-button v-if="can('apply.receive')" type="primary" :icon="Download" :loading="loading" @click="openReceive">接收 HIS 申请单</el-button>
+          <el-badge v-if="can('apply.receive')" :value="newApplyCount" :hidden="!newApplyCount" :max="99" type="danger">
+            <el-button type="primary" :icon="Refresh" :loading="loading" :disabled="receiveDisabled" @click="openReceive">
+              接收 HIS 申请单
+            </el-button>
+          </el-badge>
+          <span v-if="can('apply.receive') && receiveDisabled && countLoaded" class="tiny muted" style="margin-left:10px">
+            暂无新的 HIS 申请单
+          </span>
         </div>
       </div>
 
@@ -18,7 +25,7 @@
         <el-radio-group v-model="filters.status" size="small">
           <el-radio-button label="PENDING">待建档</el-radio-button>
           <el-radio-button label="ARCHIVED">已建档</el-radio-button>
-          <el-radio-button label="RETURNED">已退回</el-radio-button>
+          <el-radio-button label="VOIDED">已退回</el-radio-button>
         </el-radio-group>
         <el-select v-model="filters.bizMode" placeholder="业务模式" clearable style="width:140px">
           <el-option v-for="m in BIZ_MODES" :key="m" :label="m" :value="m" />
@@ -64,6 +71,12 @@
             <el-tag size="small" :type="STATUS_MAP[row.status].type">{{ STATUS_MAP[row.status].label }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column v-if="filters.status === 'VOIDED'" label="退回留痕" min-width="230" show-overflow-tooltip>
+          <template #default="{ row }">
+            <div>{{ row.returnReason || '—' }}<span v-if="row.returnNote" class="muted"> · {{ row.returnNote }}</span></div>
+            <div class="tiny">{{ (row.returnAt || '').slice(0, 16) || '—' }} · {{ row.returnBy || '—' }}</div>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="176" fixed="right">
           <template #default="{ row }">
             <template v-if="row.status === 'PENDING'">
@@ -76,7 +89,7 @@
               <el-button v-if="can('apply.return')" link type="danger" size="small" @click="openReturn(row)">退回</el-button>
             </template>
             <el-button v-else-if="row.status === 'ARCHIVED'" link type="primary" size="small" @click="goPatient(row)">查看患者</el-button>
-            <el-button v-else link type="info" size="small" @click="viewReturn(row)">查看</el-button>
+            <el-button v-else link type="info" size="small" @click="viewReturn(row)">查看退回</el-button>
           </template>
         </el-table-column>
         <template #empty><div class="empty"><div class="big">—</div>该状态下暂无申请单</div></template>
@@ -232,13 +245,13 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, nextTick } from 'vue'
+import { computed, reactive, ref, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Download, Search } from '@element-plus/icons-vue'
+import { Refresh, Search } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
-import { fetchApplyPool } from '@/api/his'
+import { fetchApplyPool, fetchApplyPoolCount } from '@/api/his'
 import { state } from '@/store/db'
 import {
   all, STATUS_MAP, BIZ_MODE_TYPE, canApply, antiCoagText, receive, correct, returnApply, buildPatient
@@ -248,6 +261,9 @@ import { BIZ_MODES } from '@/mock/dict'
 const router = useRouter()
 const filters = reactive({ status: 'PENDING', bizMode: '', keyword: '' })
 const loading = ref(false)
+// 待接收的 HIS 申请单数量：按钮右上角角标提醒；为 0 时按钮置灰
+const newApplyCount = ref(0)
+const countLoaded = ref(false)
 const receiveDlg = ref(false)
 const pool = ref([])
 const selected = ref([])
@@ -288,6 +304,22 @@ const previewDays = computed(() => {
   return dayjs().diff(dayjs(correctForm.antiCoagStopDate), 'day')
 })
 
+// 角标数量已取到且为 0 时按钮置灰；数量取不到时保持可点，避免误伤操作
+const receiveDisabled = computed(() => countLoaded.value && newApplyCount.value === 0)
+
+/** 拉取 HIS 待接收申请单数量（角标提醒） */
+async function loadApplyCount() {
+  try {
+    const res = await fetchApplyPoolCount()
+    newApplyCount.value = Number(res.count || 0)
+    countLoaded.value = true
+  } catch (e) {
+    countLoaded.value = false
+  }
+}
+
+onMounted(loadApplyCount)
+
 async function openReceive() {
   receiveDlg.value = true
   loading.value = true
@@ -311,6 +343,7 @@ function doReceive() {
     receiveDlg.value = false
     ElMessage.success(`已接收 ${selected.value.length} 条申请单，可继续办理建档`)
     filters.status = 'PENDING'
+    loadApplyCount()
   } catch (e) { ElMessage.error(e.message) }
 }
 
@@ -374,7 +407,11 @@ function doReturn() {
 
 function viewReturn(row) {
   ElMessageBox.alert(
-    `申请单 ${row.applyNo} 已退回。\n退回原因：${row.returnReason || '—'}${row.returnNote ? '（' + row.returnNote + '）' : ''}`,
+    `申请单 ${row.applyNo} 已退回。\n` +
+    `退回原因：${row.returnReason || '—'}${row.returnNote ? '（' + row.returnNote + '）' : ''}\n` +
+    `退回时间：${(row.returnAt || '').slice(0, 16) || '—'}\n` +
+    `操作人：${row.returnBy || '—'}\n` +
+    `该记录已保留在「已退回」列表，可随时回溯。`,
     '已退回申请单', { confirmButtonText: '知道了' }
   )
 }
@@ -383,3 +420,8 @@ function goPatient(row) {
   router.push('/trace/' + row.patientId)
 }
 </script>
+
+<style scoped>
+/* 角标包裹按钮：保持按钮原尺寸并让角标紧贴右上角 */
+.el-badge { display: inline-flex; align-items: center; }
+</style>

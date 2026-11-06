@@ -104,6 +104,8 @@ export function receive(poolItems) {
       status: 'PENDING',
       returnReason: '',
       returnNote: '',
+      returnAt: '',
+      returnBy: '',
       createdAt: fmtTime(new Date()),
       createdBy: state.session.name + '（' + state.session.roleLabel + '）',
       removed: false
@@ -159,6 +161,9 @@ export function returnApply(applyId, reason, note = '') {
   apply.status = 'VOIDED'
   apply.returnReason = reason
   apply.returnNote = note
+  // 留痕：退回时间与操作人，供「已退回」列表原样展示
+  apply.returnAt = fmtTime(new Date())
+  apply.returnBy = state.session.name
   log({
     module: 'APL', page: '手术申请', action: 'VOID',
     targetType: '申请单', targetId: apply.applyNo, targetName: apply.patientName + ' ' + apply.inpatientNo,

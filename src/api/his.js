@@ -13,6 +13,10 @@ export const isMockSource = () => USE_MOCK
 export const fetchApplyPool = () =>
   USE_MOCK ? mock.fetchApplyPool() : http.get('/his/day-surgery/applies')
 
+/** 待接收申请单数量（按钮角标提醒用，不返回明细） */
+export const fetchApplyPoolCount = () =>
+  USE_MOCK ? Promise.resolve(mock.fetchApplyPoolCount()) : http.get('/his/day-surgery/applies/count')
+
 export const fetchPatientArchive = (inpatientNo) =>
   USE_MOCK ? mock.fetchPatientArchive(inpatientNo) : http.get(`/his/preop/archive?inpatientNo=${inpatientNo}`)
 
