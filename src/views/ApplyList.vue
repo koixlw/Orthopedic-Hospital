@@ -10,12 +10,12 @@
         <div class="card-title">手术申请单</div>
         <div class="card-sub">接收 HIS 申请单 → 抗凝剂停药校验 → 建档进入术前流程</div>
         <div class="right">
-          <el-badge v-if="can('apply.receive')" :value="newApplyCount" :hidden="!newApplyCount" :max="99" type="danger">
+          <el-badge v-if="can('apply.receive')" :value="poolCount" :hidden="!poolCount" :max="99" type="danger">
             <el-button type="primary" :icon="Refresh" :loading="loading" :disabled="receiveDisabled" @click="openReceive">
               接收 HIS 申请单
             </el-button>
           </el-badge>
-          <span v-if="can('apply.receive') && receiveDisabled && countLoaded" class="tiny muted" style="margin-left:10px">
+          <span v-if="can('apply.receive') && receiveDisabled && poolCountLoaded" class="tiny muted" style="margin-left:10px">
             暂无新的 HIS 申请单
           </span>
         </div>
@@ -251,8 +251,9 @@ import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
-import { fetchApplyPool, fetchApplyPoolCount } from '@/api/his'
+import { fetchApplyPool } from '@/api/his'
 import { state } from '@/store/db'
+import { poolCount, poolCountLoaded, refreshPoolCount } from '@/store/his'
 import {
   all, STATUS_MAP, BIZ_MODE_TYPE, canApply, antiCoagText, receive, correct, returnApply, buildPatient
 } from '@/store/applies'
@@ -261,9 +262,7 @@ import { BIZ_MODES } from '@/mock/dict'
 const router = useRouter()
 const filters = reactive({ status: 'PENDING', bizMode: '', keyword: '' })
 const loading = ref(false)
-// 待接收的 HIS 申请单数量：按钮右上角角标提醒；为 0 时按钮置灰
-const newApplyCount = ref(0)
-const countLoaded = ref(false)
+// 待接收的 HIS 申请单数量：按钮右上角角标提醒（与侧栏「日间手术申请」角标同源）；为 0 时按钮置灰
 const receiveDlg = ref(false)
 const pool = ref([])
 const selected = ref([])
@@ -305,17 +304,11 @@ const previewDays = computed(() => {
 })
 
 // 角标数量已取到且为 0 时按钮置灰；数量取不到时保持可点，避免误伤操作
-const receiveDisabled = computed(() => countLoaded.value && newApplyCount.value === 0)
+const receiveDisabled = computed(() => poolCountLoaded.value && poolCount.value === 0)
 
-/** 拉取 HIS 待接收申请单数量（角标提醒） */
+/** 拉取 HIS 待接收申请单数量（角标提醒，侧栏同步） */
 async function loadApplyCount() {
-  try {
-    const res = await fetchApplyPoolCount()
-    newApplyCount.value = Number(res.count || 0)
-    countLoaded.value = true
-  } catch (e) {
-    countLoaded.value = false
-  }
+  await refreshPoolCount()
 }
 
 onMounted(loadApplyCount)

@@ -20,7 +20,7 @@ export function fetchApplyPool() {
 }
 
 /**
- * 待接收申请单数量：只用于「接收 HIS 申请单」按钮上的角标提醒
+ * 待接收申请单数量：用于「接收 HIS 申请单」按钮与侧栏「日间手术申请」的角标提醒
  * 不走 800ms 模拟延时，避免按钮在打开页面时长时间不可点
  */
 export function fetchApplyPoolCount() {

@@ -29,12 +29,13 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { state, resetAll } from '@/store/db'
 import { listByStatus } from '@/store/evals'
 import { can } from '@/store/session'
+import { poolCount, refreshPoolCount } from '@/store/his'
 import { NAV_GROUPS } from './nav'
 
 const route = useRoute()
@@ -45,11 +46,15 @@ const groups = computed(() => NAV_GROUPS
   .filter((g) => g.items.length))
 
 const counts = computed(() => ({
-  apply: state.applies.filter((a) => a.status === 'PENDING').length,
+  // 「日间手术申请」角标与页面「接收 HIS 申请单」按钮角标同源：HIS 待接收申请单数
+  apply: can('apply.receive') ? poolCount.value : '',
   // 待评估 = 报告未完成 + 待专科评估 + 待麻醉评估
   eval: listByStatus('REPORT_PENDING').length + listByStatus('SPECIALIST_PENDING').length + listByStatus('ANESTHESIA_PENDING').length,
   checkin: state.patients.filter((p) => p.status === 'ADMITTED').length
 }))
+
+// 进页面就取一次 HIS 待接收数量；接收申请单后由申请页刷新，两处角标同步变化
+onMounted(refreshPoolCount)
 
 function badgeOf(m) {
   if (!m.badge) return ''
