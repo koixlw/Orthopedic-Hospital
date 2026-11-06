@@ -1,5 +1,6 @@
 // OBJ-DEP-001 / 002 / 003 专项储值金账户、流水、门诊结算单（3.3—3.5）
 // ▲招标第 8 项的实现处：缴存 → 冻结 → 转入住院储值金 / 退出日间手术门诊结算，全程留痕
+// 分单：一次日间手术一张分单（分单号 = 关联申请单号），同一患者多次日间手术可分单管理、分别结算
 import { computed } from 'vue'
 import { state, persist } from './db'
 import { log } from './logs'
@@ -17,6 +18,22 @@ export const DEFAULT_CHARGED = [
   { name: '心电图检查', amount: 120 }
 ]
 
+/** 冻结用途候选（问题描述：冻结必须填写用途） */
+export const FREEZE_PURPOSES = [
+  '术前检查费用记账',
+  '术前检查检验费用记账',
+  '手术费用预缴',
+  '麻醉费用预缴'
+]
+
+/** 分单状态 */
+export const SUB_STATUS = {
+  NORMAL: { label: '未冻结', type: 'info' },
+  FROZEN: { label: '已冻结', type: 'warning' },
+  TRANSFERRED: { label: '已转住院', type: 'primary' },
+  SETTLED: { label: '已结算', type: 'success' }
+}
+
 export const all = computed(() => state.accounts)
 
 export function accountOf(patientId) {
@@ -28,6 +45,20 @@ export function flowsOf(patientId) {
   const a = accountOf(patientId)
   if (!a) return []
   return a.flows.slice().sort((x, y) => (x.time < y.time ? 1 : -1))
+}
+
+/** 分单列表：一次日间手术一张，冻结金额独立核算、分别结算 */
+export function subOrdersOf(patientId) {
+  const a = accountOf(patientId)
+  if (!a) return []
+  return a.subOrders || []
+}
+
+/** 该患者可关联的日间手术申请单（用于冻结表单选择关联申请单号） */
+export function applyNosOf(patientId) {
+  return state.applies
+    .filter((a) => a.patientId === patientId)
+    .map((a) => a.applyNo)
 }
 
 /**
@@ -57,13 +88,17 @@ export function assertBalance(account) {
   return true
 }
 
-function pushFlow(account, type, amount, remark) {
+function pushFlow(account, type, amount, remark, extra = {}) {
   const flow = {
     flowId: 'F' + String(account.flows.length + 1).padStart(4, '0') + '-' + Date.now().toString().slice(-4),
     time: fmtTime(new Date()),
     type,
     amount: round2(amount),
     balance: round2(account.available),
+    purpose: extra.purpose || '',
+    applyNo: extra.applyNo || '',
+    validUntil: extra.validUntil || '',
+    subOrderNo: extra.subOrderNo || '',
     remark,
     operator: state.session.name,
     voided: false
@@ -82,6 +117,45 @@ function nextSettleNo() {
   return 'JSM' + fmtTime(new Date()).slice(0, 10).replace(/-/g, '') + String(n).padStart(3, '0')
 }
 
+/**
+ * 取（或新建）分单：分单号即关联申请单号
+ * 同一申请单号多次冻结视为同一张分单，冻结金额累加
+ */
+function ensureSubOrder(account, form) {
+  account.subOrders = account.subOrders || []
+  let sub = account.subOrders.find((s) => s.orderNo === form.applyNo)
+  const p = getPatient(account.patientId)
+  const apply = state.applies.find((a) => a.applyNo === form.applyNo)
+  if (!sub) {
+    sub = {
+      orderNo: form.applyNo,
+      applyNo: form.applyNo,
+      applyId: apply?.applyId || '',
+      surgeryName: p?.surgeryName || apply?.surgeryName || '',
+      plannedSurgeryDate: p?.plannedSurgeryDate || apply?.plannedSurgeryDate || '',
+      purpose: '',
+      validFrom: '',
+      validTo: '',
+      frozen: 0,
+      status: 'NORMAL',
+      settlement: null,
+      createdAt: fmtTime(new Date()),
+      createdBy: state.session.name
+    }
+    account.subOrders.push(sub)
+  }
+  return sub
+}
+
+/** 账户状态由各分单汇总推导 */
+function refreshAccountStatus(account) {
+  const subs = account.subOrders || []
+  if (subs.length && subs.every((s) => s.status === 'SETTLED')) { account.status = 'SETTLED'; return }
+  if (subs.some((s) => s.status === 'TRANSFERRED')) { account.status = 'TRANSFERRED_IN'; return }
+  if (subs.some((s) => Number(s.frozen) > 0)) { account.status = 'FROZEN'; return }
+  account.status = 'NORMAL'
+}
+
 /* ---------------- FUNC-DEP-001 缴存 ---------------- */
 export function deposit(patientId, amount, payMethod = '现金') {
   assertCan('dep.deposit', { module: 'DEP', page: '储值金管理', action: 'CREATE', label: '办理储值金缴存', targetType: '储值金账户' })
@@ -94,6 +168,7 @@ export function deposit(patientId, amount, payMethod = '现金') {
 
   account.totalDeposit = round2(account.totalDeposit + amt)
   account.available = round2(account.available + amt)
+  // 缴存无用途（问题描述：缴存用途为空）
   const flow = pushFlow(account, 'DEPOSIT', amt, '门诊缴存日间手术专项储值金（' + payMethod + '）')
 
   log({
@@ -108,32 +183,57 @@ export function deposit(patientId, amount, payMethod = '现金') {
   return { account, flow }
 }
 
-/* ---------------- FUNC-DEP-002 冻结 ▲ ---------------- */
-export function freeze(patientId) {
+/* ---------------- FUNC-DEP-002 冻结 ▲ ----------------
+ * 冻结必须填写：金额、用途、有效期、关联申请单号；确认后冻结，冻结金额专款专用
+ */
+export function freeze(patientId, form = {}) {
   assertCan('dep.freeze', { module: 'DEP', page: '储值金管理', action: 'UPDATE', label: '冻结储值金', targetType: '储值金账户' })
   const account = accountOf(patientId)
   if (!account) throw new Error('该患者尚未建立储值金账户')
-  if (account.status === 'FROZEN') throw new Error('该账户储值金已冻结，不能重复冻结')
-  if (account.status !== 'NORMAL') throw new Error('当前账户状态不可冻结')
-  const amt = round2(account.available)
-  if (!(amt > 0)) throw new Error('可用余额为 0，无可冻结金额')
+  if (account.status === 'SETTLED') throw new Error('该账户已完成门诊结算，不能再冻结')
 
-  const before = { available: fmtAmount(account.available), frozen: fmtAmount(account.frozen), status: account.status }
-  account.available = 0
+  const amt = round2(Number(form.amount))
+  if (!(amt > 0)) throw new Error('冻结金额必须大于 0')
+  if (!form.purpose) throw new Error('请填写冻结用途')
+  if (!form.validFrom) throw new Error('请选择有效期开始日期')
+  if (!form.validTo) throw new Error('请选择有效期截止日期')
+  if (form.validTo < form.validFrom) throw new Error('有效期截止日期不能早于开始日期')
+  if (!form.applyNo) throw new Error('请填写关联申请单号')
+
+  const available = round2(account.available)
+  if (amt > available) throw new Error('冻结金额不能超过可用余额 ¥' + fmtAmount(available))
+
+  const before = { available: fmtAmount(available), frozen: fmtAmount(account.frozen), status: account.status }
+  const sub = ensureSubOrder(account, form)
+
+  account.available = round2(account.available - amt)
   account.frozen = round2(account.frozen + amt)
-  account.status = 'FROZEN'
-  const flow = pushFlow(account, 'FREEZE', -amt, '术前检查费用记账，全额冻结')
+  sub.frozen = round2(sub.frozen + amt)
+  sub.purpose = form.purpose
+  sub.validFrom = form.validFrom
+  sub.validTo = form.validTo
+  sub.status = 'FROZEN'
+  refreshAccountStatus(account)
+
+  const flow = pushFlow(
+    account, 'FREEZE', -amt,
+    '冻结 ¥' + fmtAmount(amt) + '（用途：' + form.purpose + '；分单 ' + sub.orderNo + '）',
+    { purpose: form.purpose, applyNo: sub.orderNo, validUntil: form.validTo, subOrderNo: sub.orderNo }
+  )
 
   log({
     module: 'DEP', page: '储值金管理', action: 'STATUS',
     targetType: '储值金账户', targetId: account.accountId, targetName: patientLabel(patientId),
     patientId, before,
-    after: { 可用余额: '0.00', 冻结金额: fmtAmount(account.frozen), 账户状态: '已冻结' },
-    reason: '术前检查费用记账，储值金冻结'
+    after: {
+      可用余额: fmtAmount(account.available), 冻结金额: fmtAmount(account.frozen),
+      冻结用途: form.purpose, 关联申请单号: sub.orderNo, 有效期至: form.validTo
+    },
+    reason: '储值金冻结（专款专用）：' + form.purpose
   })
   assertBalance(account)
   persist()
-  return { account, flow }
+  return { account, flow, subOrder: sub }
 }
 
 /* ---------------- FUNC-DEP-003 转入住院储值金 ▲ ---------------- */
@@ -141,15 +241,26 @@ export function transferIn(patientId) {
   assertCan('dep.transfer', { module: 'DEP', page: '储值金管理', action: 'UPDATE', label: '转入住院储值金', targetType: '储值金账户' })
   const account = accountOf(patientId)
   if (!account) throw new Error('该患者尚未建立储值金账户')
-  if (account.status !== 'FROZEN') throw new Error('储值金未冻结，无法转入住院储值金')
+  const frozenSubs = (account.subOrders || []).filter((s) => Number(s.frozen) > 0 && s.status !== 'SETTLED')
+  if (!frozenSubs.length) throw new Error('储值金未冻结，无法转入住院储值金')
   const amt = round2(account.frozen)
   if (!(amt > 0)) throw new Error('冻结金额为 0，无法转入住院储值金')
 
   const before = { frozen: fmtAmount(account.frozen), inpatientDeposit: fmtAmount(account.inpatientDeposit), status: account.status }
   account.frozen = 0
   account.inpatientDeposit = round2(account.inpatientDeposit + amt)
-  account.status = 'TRANSFERRED_IN'
-  const flow = pushFlow(account, 'TRANSFER_IN', amt, '入院登记，冻结金额转入住院储值金')
+  // 逐分单转出：每张分单各记一笔转住院流水
+  frozenSubs.forEach((sub) => {
+    const subAmt = round2(sub.frozen)
+    sub.frozen = 0
+    sub.status = 'TRANSFERRED'
+    pushFlow(
+      account, 'TRANSFER_IN', subAmt,
+      '入院登记，冻结金额转入住院储值金（分单 ' + sub.orderNo + '）',
+      { purpose: '转住院储值金', applyNo: sub.orderNo, subOrderNo: sub.orderNo }
+    )
+  })
+  refreshAccountStatus(account)
 
   const patient = getPatient(patientId)
   if (patient && ['SCHEDULED', 'DAY_SURGERY'].includes(patient.status)) {
@@ -165,10 +276,12 @@ export function transferIn(patientId) {
   })
   assertBalance(account)
   persist()
-  return { account, flow }
+  return { account }
 }
 
-/* ---------------- FUNC-DEP-004 退出日间手术并门诊结算 ▲ ---------------- */
+/* ---------------- FUNC-DEP-004 退出日间手术并门诊结算 ▲ ----------------
+ * 按分单分别结算：每张冻结分单各自生成一张结算单、各自退回余额
+ */
 export function withdraw(patientId, reason, note = '', chargedLines = DEFAULT_CHARGED) {
   assertCan('dep.withdraw', { module: 'DEP', page: '储值金管理', action: 'UPDATE', label: '办理退出结算', targetType: '储值金账户' })
   const account = accountOf(patientId)
@@ -178,53 +291,60 @@ export function withdraw(patientId, reason, note = '', chargedLines = DEFAULT_CH
 
   if (account.status === 'TRANSFERRED_IN') throw new Error('储值金已转入住院账户，不能按退出日间手术处理')
   if (account.status === 'SETTLED') throw new Error('该账户已完成门诊结算，不能重复退出')
-  const frozen = round2(account.frozen)
-  const available = round2(account.available)
-  const total = round2(frozen + available)
-  if (total <= 0) throw new Error('该账户没有可结算的金额')
 
-  const lines = (chargedLines || DEFAULT_CHARGED).map((l) => ({ name: l.name, amount: round2(l.amount) }))
-  const chargedTotal = round2(lines.reduce((s, l) => s + l.amount, 0))
-  if (chargedTotal > total) throw new Error('已产生门诊费用大于账户余额，无法结算')
-  const refund = round2(total - chargedTotal)
+  const subs = (account.subOrders || []).filter((s) => Number(s.frozen) > 0 && s.status !== 'SETTLED')
+  if (!subs.length) throw new Error('该账户没有可结算的冻结金额')
 
   const before = {
-    available: fmtAmount(available), frozen: fmtAmount(frozen),
+    available: fmtAmount(account.available), frozen: fmtAmount(account.frozen),
     账户状态: ACCOUNT_STATUS[account.status]?.label || account.status
   }
 
-  // ① 解冻（解冻不计流水，由下面的结算流水一次性体现）
-  if (frozen > 0) {
-    account.frozen = 0
-    account.available = round2(account.available + frozen)
-  }
-  // ② 扣除已产生门诊费用
-  account.available = round2(account.available - chargedTotal)
-  account.consumed = round2(Number(account.consumed || 0) + chargedTotal)
-  // ③ 余额退回患者
-  account.refunded = round2(Number(account.refunded || 0) + refund)
-  account.available = round2(account.available - refund)
-  account.status = 'SETTLED'
-  const settleNo = nextSettleNo()
-  account.settlement = {
-    settlementNo: settleNo,
-    at: fmtTime(new Date()),
-    reason,
-    note,
-    lines,
-    total: chargedTotal,
-    refund
-  }
-  account.flows.push({
-    flowId: 'F' + String(account.flows.length + 1).padStart(4, '0') + '-' + Date.now().toString().slice(-4),
-    time: fmtTime(new Date()),
-    type: 'SETTLE',
-    amount: -total,
-    balance: round2(account.available),
-    remark: '退出日间手术，门诊结算：扣除已产生费用 ¥' + fmtAmount(chargedTotal) + '，退回 ¥' + fmtAmount(refund),
-    operator: state.session.name,
-    voided: false
+  const settlements = []
+  subs.forEach((sub) => {
+    const total = round2(sub.frozen)
+    const lines = (chargedLines || DEFAULT_CHARGED).map((l) => ({ name: l.name, amount: round2(l.amount) }))
+    const chargedTotal = round2(lines.reduce((s, l) => s + l.amount, 0))
+    if (chargedTotal > total) throw new Error('已产生门诊费用大于分单 ' + sub.orderNo + ' 的冻结金额，无法结算')
+    const refund = round2(total - chargedTotal)
+
+    // ① 解冻（解冻不计流水，由下面的门诊记账流水一次性体现）
+    account.frozen = round2(account.frozen - total)
+    account.available = round2(account.available + total)
+    // ② 扣除已产生门诊费用
+    account.available = round2(account.available - chargedTotal)
+    account.consumed = round2(Number(account.consumed || 0) + chargedTotal)
+    // ③ 余额退回患者
+    account.refunded = round2(Number(account.refunded || 0) + refund)
+    account.available = round2(account.available - refund)
+
+    const settleNo = nextSettleNo()
+    const settlement = {
+      settlementNo: settleNo,
+      at: fmtTime(new Date()),
+      reason,
+      note,
+      lines,
+      total: chargedTotal,
+      refund,
+      applyNo: sub.orderNo
+    }
+    sub.frozen = 0
+    sub.status = 'SETTLED'
+    sub.settlement = settlement
+    settlements.push(settlement)
+
+    pushFlow(
+      account, 'OUTPATIENT_CHARGE', -total,
+      '退出日间手术，门诊结算：扣除已产生费用 ¥' + fmtAmount(chargedTotal) + '，退回 ¥' + fmtAmount(refund) +
+        '（分单 ' + sub.orderNo + '）',
+      { purpose: sub.purpose || '术前检查费用记账', applyNo: sub.orderNo, subOrderNo: sub.orderNo }
+    )
   })
+
+  account.settlement = settlements[settlements.length - 1]
+  account.settlements = (account.settlements || []).concat(settlements)
+  refreshAccountStatus(account)
 
   if (patient) {
     patient.withdrawInfo = {
@@ -232,7 +352,7 @@ export function withdraw(patientId, reason, note = '', chargedLines = DEFAULT_CH
       note,
       at: fmtTime(new Date()),
       operator: state.session.name,
-      settleNo
+      settleNo: account.settlement.settlementNo
     }
     if (!['WITHDRAWN', 'DISCHARGED'].includes(patient.status)) {
       goStatus(patient, 'WITHDRAWN', { by: state.session.name, text: '退出日间手术：' + reason })
@@ -241,17 +361,18 @@ export function withdraw(patientId, reason, note = '', chargedLines = DEFAULT_CH
 
   log({
     module: 'DEP', page: '储值金管理', action: 'STATUS',
-    targetType: '门诊结算单', targetId: settleNo, targetName: patientLabel(patientId),
+    targetType: '门诊结算单', targetId: account.settlement.settlementNo, targetName: patientLabel(patientId),
     patientId, before,
     after: {
-      账户状态: '已结算', 费用合计: fmtAmount(chargedTotal),
-      退回金额: fmtAmount(refund), 结算单号: settleNo
+      账户状态: '已结算', 分单数: String(settlements.length),
+      费用合计: fmtAmount(account.consumed), 退回金额: fmtAmount(account.refunded),
+      结算单号: settlements.map((s) => s.settlementNo).join('、')
     },
     reason: '退出日间手术：' + reason + (note ? '（' + note + '）' : '')
   })
   assertBalance(account)
   persist()
-  return account.settlement
+  return settlements
 }
 
 /* ---------------- FUNC-DEP-006 缴存记录冲正（红冲） ---------------- */
@@ -264,15 +385,16 @@ export function reverseFlow(patientId, flowId, reason) {
   if (!flow) throw new Error('未找到该笔储值金流水')
   if (flow.type !== 'DEPOSIT') throw new Error('只有缴存记录可以冲正')
   if (flow.voided) throw new Error('该笔缴存已冲正，不能重复冲正')
-  if (account.status !== 'NORMAL') throw new Error('该笔缴存已被业务引用（冻结/转住院/已结算），不能冲正')
-  if (Number(flow.amount) > Number(account.available)) throw new Error('该笔缴存已被业务引用，不能冲正')
+  if (account.status === 'SETTLED') throw new Error('该账户已完成门诊结算，不能冲正')
+  if (Number(flow.amount) > Number(account.available)) throw new Error('该笔缴存已被业务引用（冻结/转住院），不能冲正')
 
   const before = { totalDeposit: fmtAmount(account.totalDeposit), available: fmtAmount(account.available) }
   flow.voided = true
   flow.voidReason = reason
   account.totalDeposit = round2(account.totalDeposit - Number(flow.amount))
   account.available = round2(account.available - Number(flow.amount))
-  const rev = pushFlow(account, 'REVERSE', -Number(flow.amount), '冲正：' + reason + '（原流水 ' + flow.flowId + '）')
+  const rev = pushFlow(account, 'REVERSE', -Number(flow.amount), '冲正：' + reason + '（原流水 ' + flow.flowId + '）',
+    { purpose: reason })
 
   log({
     module: 'DEP', page: '储值金管理', action: 'REVERSE',

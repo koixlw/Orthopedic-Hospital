@@ -210,125 +210,200 @@ export function seedPatients() {
 }
 
 /* ---------------- 储值金账户 ---------------- */
-function flow(id, time, type, amount, balance, remark, operator, voided = false) {
-  return { flowId: id, time, type, amount, balance, remark, operator, voided }
+function flow(id, time, type, amount, balance, remark, operator, voided = false, extra = {}) {
+  return {
+    flowId: id, time, type, amount, balance,
+    purpose: '', applyNo: '', validUntil: '', subOrderNo: '',
+    remark, operator, voided, ...extra
+  }
+}
+
+/**
+ * 分单：一次日间手术一张单，以关联申请单号为分单号
+ * 同一患者多次日间手术可分单管理、分别结算；账户级金额为各分单汇总
+ */
+function subOrder(orderNo, surgeryName, plannedSurgeryDate, purpose, validFrom, validTo, frozen, status, settlement = null) {
+  return {
+    orderNo, applyNo: orderNo, surgeryName, plannedSurgeryDate,
+    purpose, validFrom, validTo, frozen, status, settlement,
+    createdAt: validFrom + ' 00:00:00', createdBy: '王芳'
+  }
 }
 
 export function seedAccounts() {
   return [
     {
       accountId: 'A001', patientId: 'P001', totalDeposit: 8000, available: 8000, frozen: 0,
-      inpatientDeposit: 0, consumed: 0, status: 'NORMAL', settlement: null,
+      inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'NORMAL', settlement: null,
+      subOrders: [],
       flows: [flow('F0001', dt(-6, 8, 30, 12), 'DEPOSIT', 8000, 8000, '门诊缴存日间手术专项储值金', '王芳')]
     },
     {
       accountId: 'A002', patientId: 'P002', totalDeposit: 6000, available: 0, frozen: 6000,
-      inpatientDeposit: 0, consumed: 0, status: 'FROZEN', settlement: null,
+      inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'FROZEN', settlement: null,
+      subOrders: [
+        subOrder('APL20261028002', '肩关节镜下肩袖修补术', d(2), '术前检查费用记账', d(-3), d(-2), 6000, 'FROZEN')
+      ],
       flows: [
         flow('F0011', dt(-3, 9, 12, 40), 'DEPOSIT', 6000, 6000, '门诊缴存日间手术专项储值金', '王芳'),
-        flow('F0012', dt(-2, 9, 5, 18), 'FREEZE', -6000, 0, '术前检查费用记账，全额冻结', '王芳')
+        flow('F0012', dt(-2, 9, 5, 18), 'FREEZE', -6000, 0, '术前检查费用记账，冻结 ¥6,000.00（分单 APL20261028002）', '王芳', false,
+          { purpose: '术前检查费用记账', applyNo: 'APL20261028002', validUntil: d(-2), subOrderNo: 'APL20261028002' })
       ]
     },
     {
       // 陈国强已排程、储值金已全额冻结、尚未办理入院登记 —— 用于演示「入院登记」主路径
       accountId: 'A003', patientId: 'P003', totalDeposit: 8000, available: 0, frozen: 8000,
-      inpatientDeposit: 0, consumed: 0, status: 'FROZEN', settlement: null,
+      inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'FROZEN', settlement: null,
+      subOrders: [
+        subOrder('APL20261029003', '经皮椎间孔镜下髓核摘除术', d(0), '术前检查费用记账', d(-4), d(-3), 8000, 'FROZEN')
+      ],
       flows: [
         flow('F0021', dt(-5, 10, 2, 6), 'DEPOSIT', 8000, 8000, '门诊缴存日间手术专项储值金', '王芳'),
-        flow('F0022', dt(-4, 8, 44, 31), 'FREEZE', -8000, 0, '术前检查费用记账，全额冻结', '王芳')
+        flow('F0022', dt(-4, 8, 44, 31), 'FREEZE', -8000, 0, '术前检查费用记账，冻结 ¥8,000.00（分单 APL20261029003）', '王芳', false,
+          { purpose: '术前检查费用记账', applyNo: 'APL20261029003', validUntil: d(-3), subOrderNo: 'APL20261029003' })
       ]
     },
     {
       accountId: 'A004', patientId: 'P004', totalDeposit: 5000, available: 0, frozen: 0,
-      inpatientDeposit: 5000, consumed: 0, status: 'TRANSFERRED_IN', settlement: null,
+      inpatientDeposit: 5000, consumed: 0, refunded: 0, status: 'TRANSFERRED_IN', settlement: null,
+      subOrders: [
+        subOrder('APL20261101006', '骨折内固定取出术', d(0), '术前检查费用记账', d(-3), d(-2), 0, 'TRANSFERRED')
+      ],
       flows: [
         flow('F0031', dt(-4, 14, 20, 51), 'DEPOSIT', 5000, 5000, '门诊缴存日间手术专项储值金', '王芳'),
-        flow('F0032', dt(-3, 9, 30, 2), 'FREEZE', -5000, 0, '术前检查费用记账，全额冻结', '王芳'),
-        flow('F0033', dt(-1, 8, 12, 44), 'TRANSFER_IN', 5000, 0, '入院登记，冻结金额转入住院储值金', '陈静')
+        flow('F0032', dt(-3, 9, 30, 2), 'FREEZE', -5000, 0, '术前检查费用记账，冻结 ¥5,000.00（分单 APL20261101006）', '王芳', false,
+          { purpose: '术前检查费用记账', applyNo: 'APL20261101006', validUntil: d(-2), subOrderNo: 'APL20261101006' }),
+        flow('F0033', dt(-1, 8, 12, 44), 'TRANSFER_IN', 5000, 0, '入院登记，冻结金额转入住院储值金（分单 APL20261101006）', '陈静', false,
+          { purpose: '转住院储值金', applyNo: 'APL20261101006', subOrderNo: 'APL20261101006' })
       ]
     },
     {
       accountId: 'A005', patientId: 'P005', totalDeposit: 4000, available: 0, frozen: 0,
-      inpatientDeposit: 4000, consumed: 0, status: 'TRANSFERRED_IN', settlement: null,
+      inpatientDeposit: 4000, consumed: 0, refunded: 0, status: 'TRANSFERRED_IN', settlement: null,
+      subOrders: [
+        subOrder('APL20261101007', '腕管切开减压术', d(0), '术前检查费用记账', d(-3), d(-2), 0, 'TRANSFERRED')
+      ],
       flows: [
         flow('F0041', dt(-4, 16, 8, 30), 'DEPOSIT', 4000, 4000, '门诊缴存日间手术专项储值金', '王芳'),
-        flow('F0042', dt(-3, 8, 40, 15), 'FREEZE', -4000, 0, '术前检查费用记账，全额冻结', '王芳'),
-        flow('F0043', dt(-1, 8, 20, 3), 'TRANSFER_IN', 4000, 0, '入院登记，冻结金额转入住院储值金', '陈静')
+        flow('F0042', dt(-3, 8, 40, 15), 'FREEZE', -4000, 0, '术前检查费用记账，冻结 ¥4,000.00（分单 APL20261101007）', '王芳', false,
+          { purpose: '术前检查费用记账', applyNo: 'APL20261101007', validUntil: d(-2), subOrderNo: 'APL20261101007' }),
+        flow('F0043', dt(-1, 8, 20, 3), 'TRANSFER_IN', 4000, 0, '入院登记，冻结金额转入住院储值金（分单 APL20261101007）', '陈静', false,
+          { purpose: '转住院储值金', applyNo: 'APL20261101007', subOrderNo: 'APL20261101007' })
       ]
     },
     {
       accountId: 'A006', patientId: 'P006', totalDeposit: 5500, available: 0, frozen: 0,
-      inpatientDeposit: 0, consumed: 960, status: 'SETTLED',
+      inpatientDeposit: 0, consumed: 960, refunded: 4540, status: 'SETTLED',
       settlement: {
         settlementNo: 'JSM20261031003', at: dt(-5, 18, 30), reason: '患者放弃手术', note: '',
         lines: [
           { name: '血常规检验', amount: 180 }, { name: '凝血四项', amount: 260 },
           { name: '心电图检查', amount: 120 }, { name: '患侧关节 MRI 平扫', amount: 400 }
         ],
-        total: 960, refund: 4540
+        total: 960, refund: 4540, applyNo: 'APL20261029008'
       },
+      subOrders: [
+        subOrder('APL20261029008', '拇外翻截骨矫形术', d(-4), '术前检查费用记账', d(-6), d(-5), 0, 'SETTLED', {
+          settlementNo: 'JSM20261031003', at: dt(-5, 18, 30), reason: '患者放弃手术', note: '',
+          lines: [
+            { name: '血常规检验', amount: 180 }, { name: '凝血四项', amount: 260 },
+            { name: '心电图检查', amount: 120 }, { name: '患侧关节 MRI 平扫', amount: 400 }
+          ],
+          total: 960, refund: 4540, applyNo: 'APL20261029008'
+        })
+      ],
       flows: [
         flow('F0051', dt(-7, 9, 10, 22), 'DEPOSIT', 5500, 5500, '门诊缴存日间手术专项储值金', '王芳'),
-        flow('F0052', dt(-6, 9, 22, 4), 'FREEZE', -5500, 0, '术前检查费用记账，全额冻结', '王芳'),
-        flow('F0053', dt(-5, 18, 30, 45), 'SETTLE', -5500, 0, '门诊结算，扣除已产生费用 ¥960.00，退回 ¥4,540.00', '王芳')
+        flow('F0052', dt(-6, 9, 22, 4), 'FREEZE', -5500, 0, '术前检查费用记账，冻结 ¥5,500.00（分单 APL20261029008）', '王芳', false,
+          { purpose: '术前检查费用记账', applyNo: 'APL20261029008', validUntil: d(-5), subOrderNo: 'APL20261029008' }),
+        flow('F0053', dt(-5, 18, 30, 45), 'OUTPATIENT_CHARGE', -5500, 0, '退出日间手术，门诊结算：扣除已产生费用 ¥960.00，退回 ¥4,540.00', '王芳', false,
+          { purpose: '术前检查费用记账', applyNo: 'APL20261029008', subOrderNo: 'APL20261029008' })
       ]
     },
     {
       accountId: 'A007', patientId: 'P007', totalDeposit: 6500, available: 0, frozen: 0,
-      inpatientDeposit: 6500, consumed: 0, status: 'TRANSFERRED_IN', settlement: null,
+      inpatientDeposit: 6500, consumed: 0, refunded: 0, status: 'TRANSFERRED_IN', settlement: null,
+      subOrders: [
+        subOrder('APL20261027009', '后路腰椎减压椎间融合术', d(-3), '术前检查费用记账', d(-7), d(-6), 0, 'TRANSFERRED')
+      ],
       flows: [
         flow('F0061', dt(-8, 11, 2, 3), 'DEPOSIT', 6500, 6500, '门诊缴存日间手术专项储值金', '王芳'),
-        flow('F0062', dt(-7, 9, 40, 12), 'FREEZE', -6500, 0, '术前检查费用记账，全额冻结', '王芳'),
-        flow('F0063', dt(-3, 8, 8, 55), 'TRANSFER_IN', 6500, 0, '入院登记，冻结金额转入住院储值金', '陈静')
+        flow('F0062', dt(-7, 9, 40, 12), 'FREEZE', -6500, 0, '术前检查费用记账，冻结 ¥6,500.00（分单 APL20261027009）', '王芳', false,
+          { purpose: '术前检查费用记账', applyNo: 'APL20261027009', validUntil: d(-6), subOrderNo: 'APL20261027009' }),
+        flow('F0063', dt(-3, 8, 8, 55), 'TRANSFER_IN', 6500, 0, '入院登记，冻结金额转入住院储值金（分单 APL20261027009）', '陈静', false,
+          { purpose: '转住院储值金', applyNo: 'APL20261027009', subOrderNo: 'APL20261027009' })
       ]
     },
     {
       accountId: 'A008', patientId: 'P008', totalDeposit: 4500, available: 0, frozen: 0,
-      inpatientDeposit: 0, consumed: 560, status: 'SETTLED',
+      inpatientDeposit: 0, consumed: 560, refunded: 3940, status: 'SETTLED',
       settlement: {
         settlementNo: 'JSM20261102001', at: dt(-2, 10, 30), reason: '评估不通过', note: '凝血功能异常，INR 1.82',
         lines: [
           { name: '血常规检验', amount: 180 }, { name: '凝血四项', amount: 260 },
           { name: '心电图检查', amount: 120 }
         ],
-        total: 560, refund: 3940
+        total: 560, refund: 3940, applyNo: 'APL20261030004'
       },
+      subOrders: [
+        subOrder('APL20261030004', '膝关节镜下关节清理术', d(-2), '术前检查费用记账', d(-5), d(-4), 0, 'SETTLED', {
+          settlementNo: 'JSM20261102001', at: dt(-2, 10, 30), reason: '评估不通过', note: '凝血功能异常，INR 1.82',
+          lines: [
+            { name: '血常规检验', amount: 180 }, { name: '凝血四项', amount: 260 },
+            { name: '心电图检查', amount: 120 }
+          ],
+          total: 560, refund: 3940, applyNo: 'APL20261030004'
+        })
+      ],
       flows: [
         flow('F0071', dt(-6, 10, 12, 9), 'DEPOSIT', 4500, 4500, '门诊缴存日间手术专项储值金', '王芳'),
-        flow('F0072', dt(-5, 9, 12, 33), 'FREEZE', -4500, 0, '术前检查费用记账，全额冻结', '王芳'),
-        flow('F0073', dt(-2, 10, 30, 5), 'SETTLE', -4500, 0, '退出日间手术，门诊结算退回 ¥3,940.00', '王芳')
+        flow('F0072', dt(-5, 9, 12, 33), 'FREEZE', -4500, 0, '术前检查费用记账，冻结 ¥4,500.00（分单 APL20261030004）', '王芳', false,
+          { purpose: '术前检查费用记账', applyNo: 'APL20261030004', validUntil: d(-4), subOrderNo: 'APL20261030004' }),
+        flow('F0073', dt(-2, 10, 30, 5), 'OUTPATIENT_CHARGE', -4500, 0, '退出日间手术，门诊结算：扣除已产生费用 ¥560.00，退回 ¥3,940.00', '王芳', false,
+          { purpose: '术前检查费用记账', applyNo: 'APL20261030004', subOrderNo: 'APL20261030004' })
       ]
     },
     /* ---- 术前评估演示患者的专项储值金账户 ---- */
     {
       accountId: 'A009', patientId: 'P009', totalDeposit: 6000, available: 6000, frozen: 0,
       inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'NORMAL', settlement: null,
+      subOrders: [],
       flows: [flow('F0081', dt(-3, 9, 20, 11), 'DEPOSIT', 6000, 6000, '门诊缴存日间手术专项储值金', '王芳')]
     },
     {
       accountId: 'A010', patientId: 'P010', totalDeposit: 7500, available: 7500, frozen: 0,
       inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'NORMAL', settlement: null,
+      subOrders: [],
       flows: [flow('F0082', dt(-2, 14, 5, 47), 'DEPOSIT', 7500, 7500, '门诊缴存日间手术专项储值金', '王芳')]
     },
     {
       accountId: 'A011', patientId: 'P011', totalDeposit: 8000, available: 0, frozen: 8000,
       inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'FROZEN', settlement: null,
+      subOrders: [
+        subOrder('APL20261104016', '椎间孔镜下髓核摘除术', d(2), '术前检查费用记账', d(-3), d(-2), 8000, 'FROZEN')
+      ],
       flows: [
         flow('F0083', dt(-4, 9, 15, 20), 'DEPOSIT', 8000, 8000, '门诊缴存日间手术专项储值金', '王芳'),
-        flow('F0084', dt(-3, 8, 50, 3), 'FREEZE', -8000, 0, '术前检查费用记账，全额冻结', '王芳')
+        flow('F0084', dt(-3, 8, 50, 3), 'FREEZE', -8000, 0, '术前检查费用记账，冻结 ¥8,000.00（分单 APL20261104016）', '王芳', false,
+          { purpose: '术前检查费用记账', applyNo: 'APL20261104016', validUntil: d(-2), subOrderNo: 'APL20261104016' })
       ]
     },
     {
       accountId: 'A012', patientId: 'P012', totalDeposit: 5000, available: 5000, frozen: 0,
       inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'NORMAL', settlement: null,
+      subOrders: [],
       flows: [flow('F0085', dt(-2, 10, 40, 26), 'DEPOSIT', 5000, 5000, '门诊缴存日间手术专项储值金', '王芳')]
     },
     {
       accountId: 'A013', patientId: 'P013', totalDeposit: 6500, available: 0, frozen: 6500,
       inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'FROZEN', settlement: null,
+      subOrders: [
+        subOrder('APL20261103018', '骨折内固定取出术', d(-1), '术前检查费用记账', d(-4), d(-3), 6500, 'FROZEN')
+      ],
       flows: [
         flow('F0086', dt(-5, 10, 30, 2), 'DEPOSIT', 6500, 6500, '门诊缴存日间手术专项储值金', '王芳'),
-        flow('F0087', dt(-4, 9, 5, 41), 'FREEZE', -6500, 0, '术前检查费用记账，全额冻结', '王芳')
+        flow('F0087', dt(-4, 9, 5, 41), 'FREEZE', -6500, 0, '术前检查费用记账，冻结 ¥6,500.00（分单 APL20261103018）', '王芳', false,
+          { purpose: '术前检查费用记账', applyNo: 'APL20261103018', validUntil: d(-3), subOrderNo: 'APL20261103018' })
       ]
     },
     {
@@ -340,22 +415,36 @@ export function seedAccounts() {
           { name: '血常规检验', amount: 180 }, { name: '凝血四项', amount: 260 },
           { name: '心电图检查', amount: 120 }
         ],
-        total: 560, refund: 4640
+        total: 560, refund: 4640, applyNo: 'APL20261103019'
       },
+      subOrders: [
+        subOrder('APL20261103019', '拇外翻截骨矫形术', d(-2), '术前检查费用记账', d(-5), d(-4), 0, 'SETTLED', {
+          settlementNo: 'JSM20261104002', at: dt(-1, 15, 30), reason: '评估不通过', note: '麻醉评估不通过：心肺功能不全，ASA IV 级',
+          lines: [
+            { name: '血常规检验', amount: 180 }, { name: '凝血四项', amount: 260 },
+            { name: '心电图检查', amount: 120 }
+          ],
+          total: 560, refund: 4640, applyNo: 'APL20261103019'
+        })
+      ],
       flows: [
         flow('F0088', dt(-6, 9, 12, 45), 'DEPOSIT', 5200, 5200, '门诊缴存日间手术专项储值金', '王芳'),
-        flow('F0089', dt(-5, 8, 30, 19), 'FREEZE', -5200, 0, '术前检查费用记账，全额冻结', '王芳'),
-        flow('F0090', dt(-1, 15, 30, 8), 'SETTLE', -5200, 0, '退出日间手术，门诊结算退回 ¥4,640.00', '王芳')
+        flow('F0089', dt(-5, 8, 30, 19), 'FREEZE', -5200, 0, '术前检查费用记账，冻结 ¥5,200.00（分单 APL20261103019）', '王芳', false,
+          { purpose: '术前检查费用记账', applyNo: 'APL20261103019', validUntil: d(-4), subOrderNo: 'APL20261103019' }),
+        flow('F0090', dt(-1, 15, 30, 8), 'OUTPATIENT_CHARGE', -5200, 0, '退出日间手术，门诊结算：扣除已产生费用 ¥560.00，退回 ¥4,640.00', '王芳', false,
+          { purpose: '术前检查费用记账', applyNo: 'APL20261103019', subOrderNo: 'APL20261103019' })
       ]
     },
     {
       accountId: 'A015', patientId: 'P015', totalDeposit: 7000, available: 7000, frozen: 0,
       inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'NORMAL', settlement: null,
+      subOrders: [],
       flows: [flow('F0091', dt(-1, 11, 5, 33), 'DEPOSIT', 7000, 7000, '门诊缴存日间手术专项储值金', '王芳')]
     },
     {
       accountId: 'A016', patientId: 'P016', totalDeposit: 4800, available: 4800, frozen: 0,
       inpatientDeposit: 0, consumed: 0, refunded: 0, status: 'NORMAL', settlement: null,
+      subOrders: [],
       flows: [flow('F0092', dt(0, 8, 55, 12), 'DEPOSIT', 4800, 4800, '门诊缴存日间手术专项储值金', '王芳')]
     }
   ]
@@ -1031,7 +1120,8 @@ export const ACCOUNT_STATUS = {
 }
 
 export const FLOW_TYPE = {
-  DEPOSIT: '缴存', FREEZE: '冻结', TRANSFER_IN: '转住院', SETTLE: '门诊结算', REVERSE: '冲正'
+  DEPOSIT: '缴存', FREEZE: '冻结', OUTPATIENT_CHARGE: '门诊记账',
+  TRANSFER_IN: '转住院', REVERSE: '冲正'
 }
 
 export const todayStr = () => fmtDate(new Date())

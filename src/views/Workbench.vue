@@ -468,9 +468,10 @@ function doWithdraw() {
   if (!withdrawForm.reason) return ElMessage.warning('请选择退出原因')
   if (withdrawForm.reason === '其他原因' && !withdrawForm.note) return ElMessage.warning('选择「其他原因」时必须填写补充说明')
   try {
-    const st = withdraw(withdrawTarget.value.patientId, withdrawForm.reason, withdrawForm.note)
+    const list = withdraw(withdrawTarget.value.patientId, withdrawForm.reason, withdrawForm.note)
     withdrawDlg.value = false
-    ElMessage.success(`已退出日间手术，结算单 ${st.settlementNo}，退回 ¥${st.refund.toFixed(2)}`)
+    const refund = list.reduce((s, x) => s + x.refund, 0)
+    ElMessage.success(`已退出日间手术，生成 ${list.length} 张分单结算单，退回 ¥${refund.toFixed(2)}`)
   } catch (e) { ElMessage.error(e.message) }
 }
 

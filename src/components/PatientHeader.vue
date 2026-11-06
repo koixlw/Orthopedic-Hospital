@@ -18,6 +18,7 @@
       </div>
     </div>
     <div class="ops">
+      <el-button size="small" :icon="Back" @click="goBack">返回</el-button>
       <slot name="actions" />
     </div>
   </div>
@@ -25,9 +26,17 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { Back } from '@element-plus/icons-vue'
 import { PATIENT_STATUS } from '@/mock/dict'
 
 const props = defineProps({ patient: { type: Object, required: true } })
+const router = useRouter()
 const statusLabel = computed(() => PATIENT_STATUS[props.patient.status]?.label || props.patient.status)
 const statusType = computed(() => PATIENT_STATUS[props.patient.status]?.type || 'info')
+
+function goBack() {
+  if (window.history.state?.back) router.back()
+  else router.push('/')
+}
 </script>

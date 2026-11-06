@@ -233,6 +233,8 @@ export function buildPatient(applyId, extra = {}) {
     refunded: 0,
     status: 'NORMAL',
     settlement: null,
+    settlements: [],
+    subOrders: [],
     flows: []
   })
 

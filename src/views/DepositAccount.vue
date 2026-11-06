@@ -30,6 +30,16 @@
               <el-tag size="small" :type="ACC_STATUS[row.status].type">{{ ACC_STATUS[row.status].label }}</el-tag>
             </template>
           </el-table-column>
+          <el-table-column label="分单" width="112" align="center">
+            <template #default="{ row }">
+              <el-tooltip :disabled="!subCount(row)" placement="top">
+                <template #content>
+                  <div v-for="s in row.subOrders || []" :key="s.orderNo">{{ s.orderNo }} · {{ SUB_STATUS[s.status].label }}</div>
+                </template>
+                <span class="num">{{ subCount(row) }} 张</span>
+              </el-tooltip>
+            </template>
+          </el-table-column>
           <el-table-column label="缴存总额" width="120" align="right">
             <template #default="{ row }"><span class="num">¥{{ fmtAmount(row.totalDeposit) }}</span></template>
           </el-table-column>
@@ -84,7 +94,7 @@
         <div class="money-card" :class="account.frozen > 0 ? 'orange' : 'grey'">
           <div class="k"><el-icon><Lock /></el-icon> 冻结金额</div>
           <div class="v">¥{{ fmtAmount(account.frozen) }}</div>
-          <div class="u">术前检查费用记账中，不可支取</div>
+          <div class="u">已冻结专款专用，不可支取</div>
         </div>
         <div class="money-card blue">
           <div class="k"><el-icon><OfficeBuilding /></el-icon> 住院储值金</div>
@@ -98,14 +108,13 @@
           <div class="card-title">账户操作</div>
           <div class="card-sub">四栏金额满足：可用 + 冻结 + 住院 + 已消耗 = 缴存总额</div>
           <div class="right">
-            <el-button v-if="account.status === 'NORMAL' && can('dep.deposit')" type="primary" :icon="Plus" @click="depositDlg = true">缴存储值金</el-button>
-            <el-button v-if="account.status === 'NORMAL' && can('dep.freeze')" type="warning" :icon="Lock" @click="doFreeze">冻结储值金</el-button>
-            <el-button v-if="account.status === 'FROZEN' && can('dep.transfer')" type="primary" :icon="Right" @click="doTransfer">转住院（转入住院储值金）</el-button>
+            <el-button v-if="account.status !== 'SETTLED' && can('dep.deposit')" type="primary" :icon="Plus" @click="depositDlg = true">缴存储值金</el-button>
+            <el-button v-if="canFreeze && can('dep.freeze')" type="warning" :icon="Lock" @click="openFreeze">冻结储值金</el-button>
+            <el-button v-if="hasFrozenSub && can('dep.transfer')" type="primary" :icon="Right" @click="doTransfer">转住院（转入住院储值金）</el-button>
             <el-button v-if="account.status === 'TRANSFERRED_IN'" disabled>已转入住院账户</el-button>
             <el-button v-if="account.status === 'TRANSFERRED_IN'" @click="viewInpatient">查看住院储值金</el-button>
             <el-button v-if="account.status === 'SETTLED'" @click="viewSettlement">查看门诊结算单</el-button>
-            <el-button v-if="['NORMAL','FROZEN','SCHEDULED'].includes(account.status) && patient.status !== 'WITHDRAWN' && can('dep.withdraw')"
-              type="danger" plain @click="openWithdraw">退出日间手术</el-button>
+            <el-button v-if="canWithdraw && can('dep.withdraw')" type="danger" plain @click="openWithdraw">退出日间手术</el-button>
           </div>
         </div>
 
@@ -119,15 +128,11 @@
           </span>
         </div>
 
+        <!-- 账户视角：发生时间 / 发生金额 / 业务类型 / 用途 / 备注 -->
         <template v-if="viewMode === 'account'">
           <el-table :data="flows" size="small" border style="width:100%" :row-class-name="flowRowClass">
-            <el-table-column label="时间" width="158">
+            <el-table-column label="发生时间" width="158">
               <template #default="{ row }"><span class="num">{{ row.time.slice(0, 16) }}</span></template>
-            </el-table-column>
-            <el-table-column label="业务类型" width="100">
-              <template #default="{ row }">
-                <el-tag size="small" :type="flowTag(row)" effect="plain">{{ FLOW_TYPE[row.type] }}</el-tag>
-              </template>
             </el-table-column>
             <el-table-column label="发生金额" width="128" align="right">
               <template #default="{ row }">
@@ -136,10 +141,48 @@
                 </span>
               </template>
             </el-table-column>
-            <el-table-column label="余额" width="120" align="right">
-              <template #default="{ row }"><span class="num">¥{{ fmtAmount(row.balance) }}</span></template>
+            <el-table-column label="业务类型" width="104">
+              <template #default="{ row }">
+                <el-tag size="small" :type="flowTag(row)" effect="plain">{{ FLOW_TYPE[row.type] }}</el-tag>
+              </template>
             </el-table-column>
-            <el-table-column prop="remark" label="备注" min-width="200" show-overflow-tooltip />
+            <el-table-column label="用途" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span v-if="row.purpose">{{ row.purpose }}</span>
+                <span v-else class="muted">—</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="remark" label="备注" min-width="240" show-overflow-tooltip />
+            <template #empty><div class="empty">该账户暂无资金变动</div></template>
+          </el-table>
+        </template>
+
+        <!-- 流水视角：流水号 / 发生时间 / 发生金额 / 业务类型 / 用途 / 备注 / 操作员 / 状态 -->
+        <template v-else>
+          <el-table :data="flows" size="small" border :row-class-name="flowRowClass">
+            <el-table-column label="流水号" width="106">
+              <template #default="{ row }"><span class="mono">{{ row.flowId }}</span></template>
+            </el-table-column>
+            <el-table-column label="发生时间" width="150">
+              <template #default="{ row }"><span class="num">{{ row.time.slice(0, 16) }}</span></template>
+            </el-table-column>
+            <el-table-column label="发生金额" width="122" align="right">
+              <template #default="{ row }">
+                <span class="num" :class="{ strike: row.voided, 'amount-red': row.amount < 0 }">
+                  {{ row.amount >= 0 ? '+' : '-' }}¥{{ fmtAmount(Math.abs(row.amount)) }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="业务类型" width="104">
+              <template #default="{ row }">{{ FLOW_TYPE[row.type] }}</template>
+            </el-table-column>
+            <el-table-column label="用途" min-width="170" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span v-if="row.purpose">{{ row.purpose }}</span>
+                <span v-else class="muted">—</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="remark" label="备注" min-width="220" show-overflow-tooltip />
             <el-table-column prop="operator" label="操作员" width="80" />
             <el-table-column label="状态" width="86" align="center">
               <template #default="{ row }">
@@ -148,32 +191,12 @@
             </el-table-column>
             <el-table-column label="操作" width="80" align="center">
               <template #default="{ row }">
-                <el-button v-if="row.type === 'DEPOSIT' && !row.voided && account.status === 'NORMAL' && can('dep.reverse')" link type="danger" size="small"
-                  @click="openReverse(row)">冲正</el-button>
+                <el-button v-if="row.type === 'DEPOSIT' && !row.voided && account.status !== 'SETTLED' && can('dep.reverse')"
+                  link type="danger" size="small" @click="openReverse(row)">冲正</el-button>
+                <span v-else class="tiny">—</span>
               </template>
             </el-table-column>
-          </el-table>
-        </template>
-
-        <template v-else>
-          <el-table :data="flows" size="small" border :row-class-name="flowRowClass">
-            <el-table-column label="流水号" width="100">
-              <template #default="{ row }"><span class="mono">{{ row.flowId }}</span></template>
-            </el-table-column>
-            <el-table-column label="时间" width="158">
-              <template #default="{ row }"><span class="num">{{ row.time.slice(0, 16) }}</span></template>
-            </el-table-column>
-            <el-table-column label="业务类型" width="100">
-              <template #default="{ row }">{{ FLOW_TYPE[row.type] }}</template>
-            </el-table-column>
-            <el-table-column label="发生金额" width="128" align="right">
-              <template #default="{ row }"><span class="num">{{ fmtAmount(row.amount) }}</span></template>
-            </el-table-column>
-            <el-table-column prop="remark" label="备注" min-width="220" />
-            <el-table-column prop="operator" label="操作员" width="80" />
-            <el-table-column label="状态" width="90">
-              <template #default="{ row }">{{ row.voided ? '已冲正' : '正常' }}</template>
-            </el-table-column>
+            <template #empty><div class="empty">该账户暂无流水记录</div></template>
           </el-table>
         </template>
 
@@ -181,6 +204,50 @@
           <el-icon><InfoFilled /></el-icon>
           业务流水一经记账不可改动，纠错一律使用「冲正」：原记录灰显保留，同时生成一笔负数流水，金额恒等式始终成立。
         </div>
+      </div>
+
+      <!-- 分单管理 -->
+      <div class="card" style="margin-top:14px">
+        <div class="card-head">
+          <div class="card-title">分单管理</div>
+          <div class="card-sub">
+            同一患者多次日间手术可分单管理、分别结算；分单号即关联申请单号，冻结金额专款专用
+          </div>
+        </div>
+        <el-table :data="subOrders" size="small" border style="width:100%">
+          <el-table-column prop="orderNo" label="分单号 / 关联申请单号" width="170">
+            <template #default="{ row }"><span class="mono">{{ row.orderNo }}</span></template>
+          </el-table-column>
+          <el-table-column prop="surgeryName" label="手术名称" min-width="160" show-overflow-tooltip />
+          <el-table-column label="冻结金额" width="118" align="right">
+            <template #default="{ row }"><span class="num">¥{{ fmtAmount(row.frozen) }}</span></template>
+          </el-table-column>
+          <el-table-column label="用途" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.purpose || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="有效期" width="176">
+            <template #default="{ row }">
+              <span class="num">{{ row.validFrom || '—' }} ~ {{ row.validTo || '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="94" align="center">
+            <template #default="{ row }">
+              <el-tag size="small" :type="SUB_STATUS[row.status].type" effect="plain">{{ SUB_STATUS[row.status].label }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="结算单" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span v-if="row.settlement" class="mono">{{ row.settlement.settlementNo }}</span>
+              <span v-else class="muted">—</span>
+            </template>
+          </el-table-column>
+          <template #empty>
+            <div class="empty">
+              <div class="big">—</div>
+              该患者暂无分单，办理冻结时填写关联申请单号即可自动建单
+            </div>
+          </template>
+        </el-table>
       </div>
 
       <div class="card" style="margin-top:14px">
@@ -248,8 +315,41 @@
       </template>
     </el-dialog>
 
+    <!-- 冻结 -->
+    <el-dialog v-model="freezeDlg" title="冻结日间手术专项储值金" width="520px">
+      <div class="hint-box info" style="margin-bottom:12px">
+        <el-icon><InfoFilled /></el-icon>
+        <div>冻结需填写<strong>金额、用途、有效期、关联申请单号</strong>；确认后冻结金额专款专用，不可直接支取。</div>
+      </div>
+      <el-form label-width="96px">
+        <el-form-item label="冻结金额" required>
+          <el-input-number v-model="freezeForm.amount" :min="0.01" :max="account?.available || 0" :step="500" :precision="2" style="width:100%" />
+          <div class="tiny mt8">可用余额 ¥{{ fmtAmount(account?.available || 0) }}</div>
+        </el-form-item>
+        <el-form-item label="冻结用途" required>
+          <el-select v-model="freezeForm.purpose" filterable allow-create placeholder="请选择或输入冻结用途" style="width:100%">
+            <el-option v-for="p in FREEZE_PURPOSES" :key="p" :label="p" :value="p" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="有效期" required>
+          <el-date-picker v-model="freezeForm.validRange" type="daterange" value-format="YYYY-MM-DD"
+            start-placeholder="开始日期" end-placeholder="截止日期" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="关联申请单号" required>
+          <el-select v-model="freezeForm.applyNo" filterable allow-create placeholder="请选择或输入关联申请单号" style="width:100%">
+            <el-option v-for="a in applyNos" :key="a" :label="a" :value="a" />
+          </el-select>
+          <div class="tiny mt8">一次日间手术一张分单，分单号即关联申请单号，可分别结算。</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="freezeDlg = false">取消</el-button>
+        <el-button type="warning" @click="doFreeze">确认冻结</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 退出 -->
-    <el-dialog v-model="withdrawDlg" title="退出日间手术并门诊结算" width="480px">
+    <el-dialog v-model="withdrawDlg" title="退出日间手术并门诊结算" width="520px">
       <el-form label-width="88px">
         <el-form-item label="退出原因" required>
           <el-radio-group v-model="withdrawForm.reason">
@@ -260,9 +360,13 @@
           <el-input v-model="withdrawForm.note" type="textarea" :rows="2" />
         </el-form-item>
       </el-form>
-      <div class="hint-box warn">
+      <div v-if="hasFrozenSub" class="hint-box warn">
         <el-icon><Warning /></el-icon>
-        退出后系统生成门诊结算单，冻结金额解冻并扣除已产生门诊费用，余额退回。患者流程结束。
+        <div>退出后按分单分别结算（{{ subOrders.length }} 张分单），冻结金额解冻并扣除已产生门诊费用，余额退回。患者流程结束。</div>
+      </div>
+      <div v-else class="hint-box warn">
+        <el-icon><Warning /></el-icon>
+        <div>该账户当前没有冻结金额，退出后直接按账户余额退回。患者流程结束。</div>
       </div>
       <template #footer>
         <el-button @click="withdrawDlg = false">取消</el-button>
@@ -271,12 +375,43 @@
     </el-dialog>
 
     <!-- 结算单 -->
-    <el-dialog v-model="settleDlg" title="门诊结算单" width="560px">
+    <el-dialog v-model="settleDlg" title="门诊结算单（按分单分别结算）" width="760px">
+      <el-table :data="settlements" size="small" border>
+        <el-table-column prop="settlementNo" label="结算单号" width="140">
+          <template #default="{ row }"><span class="mono">{{ row.settlementNo }}</span></template>
+        </el-table-column>
+        <el-table-column prop="applyNo" label="分单号" width="150">
+          <template #default="{ row }"><span class="mono">{{ row.applyNo }}</span></template>
+        </el-table-column>
+        <el-table-column label="结算时间" width="140">
+          <template #default="{ row }"><span class="num">{{ row.at.slice(0, 16) }}</span></template>
+        </el-table-column>
+        <el-table-column label="已产生费用" width="106" align="right">
+          <template #default="{ row }"><span class="num">¥{{ fmtAmount(row.total) }}</span></template>
+        </el-table-column>
+        <el-table-column label="退回金额" width="106" align="right">
+          <template #default="{ row }"><span class="num amount-green">¥{{ fmtAmount(row.refund) }}</span></template>
+        </el-table-column>
+        <el-table-column label="操作" width="80" align="center">
+          <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="openSettlement(row)">明细</el-button>
+          </template>
+        </el-table-column>
+        <template #empty><div class="empty">暂无结算单</div></template>
+      </el-table>
+      <template #footer>
+        <el-button @click="settleDlg = false">关闭</el-button>
+        <el-button type="primary" @click="fakePrint">打印结算单</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 结算单明细 -->
+    <el-dialog v-model="settleDetailDlg" title="门诊结算单明细" width="560px">
       <template v-if="settlement">
         <div class="flex" style="justify-content:space-between;margin-bottom:12px">
           <div>
             <div style="font-weight:700;font-size:14px">{{ settlement.settlementNo }}</div>
-            <div class="tiny">结算时间 {{ settlement.at }} · 操作员 {{ patient.name }} 的门诊结算</div>
+            <div class="tiny">分单 {{ settlement.applyNo }} · 结算时间 {{ settlement.at }}</div>
           </div>
           <el-tag type="success" effect="plain">已结算</el-tag>
         </div>
@@ -294,11 +429,11 @@
         </div>
         <div class="hint-box info mt12">
           <el-icon><InfoFilled /></el-icon>
-          结算单由系统自动生成，不涉及退费复核；冻结金额已解冻并按实际发生费用抵扣。
+          结算单由系统按分单自动生成，不涉及退费复核；冻结金额已解冻并按实际发生费用抵扣。
         </div>
       </template>
       <template #footer>
-        <el-button @click="settleDlg = false">关闭</el-button>
+        <el-button @click="settleDetailDlg = false">关闭</el-button>
         <el-button type="primary" @click="fakePrint">打印结算单</el-button>
       </template>
     </el-dialog>
@@ -342,6 +477,8 @@ const route = useRoute()
 const router = useRouter()
 const ACC_STATUS = accStore.ACCOUNT_STATUS
 const FLOW_TYPE = accStore.FLOW_TYPE
+const SUB_STATUS = accStore.SUB_STATUS
+const FREEZE_PURPOSES = accStore.FREEZE_PURPOSES
 
 const kw = ref('')
 const accStatus = ref('')
@@ -351,9 +488,13 @@ const viewMode = ref('account')
 
 const depositDlg = ref(false)
 const depositForm = reactive({ amount: 8000, method: '扫码' })
+const freezeDlg = ref(false)
+const freezeForm = reactive({ amount: 0, purpose: '术前检查费用记账', validRange: [], applyNo: '' })
 const withdrawDlg = ref(false)
 const withdrawForm = reactive({ reason: '', note: '' })
 const settleDlg = ref(false)
+const settleDetailDlg = ref(false)
+const settlement = ref(null)
 const reverseDlg = ref(false)
 const reverseRow = ref(null)
 const reverseForm = reactive({ reason: '' })
@@ -361,8 +502,22 @@ const reverseForm = reactive({ reason: '' })
 const patient = computed(() => (route.params.patientId ? getPatient(route.params.patientId) : null))
 const account = computed(() => (patient.value ? accStore.accountOf(patient.value.patientId) : null))
 const flows = computed(() => (patient.value ? accStore.flowsOf(patient.value.patientId) : []))
+const subOrders = computed(() => (patient.value ? accStore.subOrdersOf(patient.value.patientId) : []))
+const applyNos = computed(() => (patient.value ? accStore.applyNosOf(patient.value.patientId) : []))
 const lastFlow = computed(() => flows.value[0] || null)
-const settlement = computed(() => account.value?.settlement || null)
+const settlements = computed(() => {
+  if (!account.value) return []
+  const list = account.value.settlements || []
+  if (list.length) return list
+  return account.value.settlement ? [account.value.settlement] : []
+})
+const hasFrozenSub = computed(() => subOrders.value.some((s) => Number(s.frozen) > 0 && s.status !== 'SETTLED'))
+const canFreeze = computed(() => !!account.value && account.value.status !== 'SETTLED' && Number(account.value.available) > 0)
+// 退出日间手术：已冻结或仍有可用余额都可办理
+const canWithdraw = computed(() =>
+  !!account.value && account.value.status !== 'SETTLED' &&
+  patient.value && !['WITHDRAWN', 'DISCHARGED'].includes(patient.value.status))
+
 // 本患者留痕：按时间倒序取最新 6 条（日志本身只追加，不改动）
 const accountLogs = computed(() => {
   if (!patient.value) return []
@@ -392,25 +547,40 @@ const accRows = computed(() => accStore.all.value.filter((a) => {
 const pname = (id) => getPatient(id)?.name || '—'
 const pno = (id) => getPatient(id)?.inpatientNo || ''
 const pstatus = (id) => getPatient(id)?.status || 'DAY_SURGERY'
+const subCount = (row) => (row.subOrders || []).length
 
 function flowTag(row) {
-  return { DEPOSIT: 'success', FREEZE: 'warning', TRANSFER_IN: 'primary', SETTLE: 'info', REVERSE: 'danger' }[row.type] || 'info'
+  return { DEPOSIT: 'success', FREEZE: 'warning', OUTPATIENT_CHARGE: 'info', TRANSFER_IN: 'primary', REVERSE: 'danger' }[row.type] || 'info'
 }
 function flowRowClass({ row }) {
   return row.voided ? 'row-void' : ''
 }
 function go(id) { router.push('/deposit/' + id) }
 
+function openFreeze() {
+  freezeForm.amount = Number(account.value?.available || 0)
+  freezeForm.purpose = FREEZE_PURPOSES[0]
+  freezeForm.validRange = []
+  freezeForm.applyNo = applyNos.value[0] || ''
+  freezeDlg.value = true
+}
+
 function doFreeze() {
-  ElMessageBox.confirm(
-    `确认冻结患者${patient.value.name}的日间手术专项储值金 ¥${fmtAmount(account.value.available)}？冻结后不可直接支取。`,
-    '冻结储值金', { type: 'warning', confirmButtonText: '确认冻结', cancelButtonText: '取消' }
-  ).then(() => {
-    try {
-      accStore.freeze(patient.value.patientId)
-      ElMessage.success(`已冻结储值金 ¥${fmtAmount(account.value.frozen)}`)
-    } catch (e) { ElMessage.error(e.message) }
-  }).catch(() => {})
+  if (!freezeForm.amount || freezeForm.amount <= 0) return ElMessage.warning('请填写冻结金额')
+  if (!freezeForm.purpose) return ElMessage.warning('请填写冻结用途')
+  if (!freezeForm.validRange || freezeForm.validRange.length !== 2) return ElMessage.warning('请选择有效期')
+  if (!freezeForm.applyNo) return ElMessage.warning('请填写关联申请单号')
+  try {
+    const r = accStore.freeze(patient.value.patientId, {
+      amount: freezeForm.amount,
+      purpose: freezeForm.purpose,
+      validFrom: freezeForm.validRange[0],
+      validTo: freezeForm.validRange[1],
+      applyNo: freezeForm.applyNo
+    })
+    freezeDlg.value = false
+    ElMessage.success(`已冻结 ¥${fmtAmount(freezeForm.amount)}（分单 ${r.subOrder.orderNo}），冻结金额专款专用`)
+  } catch (e) { ElMessage.error(e.message) }
 }
 
 function doTransfer() {
@@ -433,8 +603,13 @@ function viewInpatient() {
 }
 
 function viewSettlement() {
-  if (!settlement.value) return ElMessage.info('该账户暂无结算单')
+  if (!settlements.value.length) return ElMessage.info('该账户暂无结算单')
   settleDlg.value = true
+}
+
+function openSettlement(row) {
+  settlement.value = row
+  settleDetailDlg.value = true
 }
 
 function doDeposit() {
@@ -455,10 +630,10 @@ function doWithdraw() {
   if (!withdrawForm.reason) return ElMessage.warning('请选择退出原因')
   if (withdrawForm.reason === '其他原因' && !withdrawForm.note) return ElMessage.warning('选择「其他原因」时必须填写补充说明')
   try {
-    accStore.withdraw(patient.value.patientId, withdrawForm.reason, withdrawForm.note)
+    const list = accStore.withdraw(patient.value.patientId, withdrawForm.reason, withdrawForm.note)
     withdrawDlg.value = false
     settleDlg.value = true
-    ElMessage.success('已退出日间手术，门诊结算单已生成')
+    ElMessage.success(`已退出日间手术，生成 ${list.length} 张分单结算单`)
   } catch (e) { ElMessage.error(e.message) }
 }
 

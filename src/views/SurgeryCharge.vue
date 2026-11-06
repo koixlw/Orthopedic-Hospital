@@ -147,8 +147,7 @@
       </template>
     </el-dialog>
   </div>
-  <PickPatient v-else to="/charge" title="请选择患者后录入手术费用"
-    desc="手术费用按患者建单，选择下方患者或返回工作台，从「待办」中进入该患者费用页" />
+  <PickPatient v-else to="/charge" />
 </template>
 
 <script setup>
