@@ -107,14 +107,14 @@
       </el-table>
     </div>
 
-    <!-- 待排程患者：两项评估均通过但尚未安排手术 -->
+    <!-- 待排程患者：术前准备中的患者；双评估通过即可安排 -->
     <div class="card" style="margin-top:14px">
       <div class="card-head">
         <div class="card-title">待排程患者</div>
-        <div class="card-sub">两项评估均通过、尚未安排手术的患者；点击「安排手术」带入上方日视图的空档</div>
-        <div class="right"><span class="tiny muted">共 {{ candidates.length }} 人</span></div>
+        <div class="card-sub">术前准备中的患者；专科与麻醉两项评估均通过后即可安排手术，未通过的可先到「术前评估」页完成评估</div>
+        <div class="right"><span class="tiny muted">共 {{ pool.length }} 人 · 可安排 {{ candidates.length }} 人</span></div>
       </div>
-      <el-table :data="candidates" size="small" border style="width:100%">
+      <el-table :data="pool" size="small" border style="width:100%">
         <el-table-column label="患者" width="150">
           <template #default="{ row }">
             <div>{{ row.name }}</div>
@@ -143,12 +143,16 @@
             <span class="tiny">{{ accText(row.patientId) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="110" align="right">
+        <el-table-column label="操作" width="130" align="right">
           <template #default="{ row }">
-            <el-button v-if="can('sch.create')" link type="primary" size="small" @click="openCreate({ patientId: row.patientId })">安排手术</el-button>
+            <el-tooltip v-if="!canSchedule(row)" content="两项评估未全部通过，暂不能安排手术" placement="top">
+              <span><el-button link size="small" disabled>安排手术</el-button></span>
+            </el-tooltip>
+            <el-button v-else-if="can('sch.create')" link type="primary" size="small" @click="openCreate({ patientId: row.patientId })">安排手术</el-button>
+            <el-button v-else link size="small" disabled>安排手术</el-button>
           </template>
         </el-table-column>
-        <template #empty><div class="empty">暂无待排程患者</div></template>
+        <template #empty><div class="empty">术前准备中暂无患者，可先在「入院登记 / 术前评估」流程推进</div></template>
       </el-table>
     </div>
 
@@ -156,13 +160,25 @@
     <el-drawer v-model="createDlg" title="创建手术预约" size="520px">
       <div class="notice-bar">
         <el-icon><InfoFilled /></el-icon>
-        仅列出两项评估均通过的患者。创建后自动发送预约成功短信，并按参数生成入院前提醒。
+        列出术前准备中的患者；专科与麻醉两项评估均通过后方可创建预约，未通过的患者已置灰并标注原因。
       </div>
       <el-form label-width="96px">
         <el-form-item label="患者" required>
           <el-select v-model="createForm.patientId" filterable placeholder="搜索姓名或住院号" style="width:100%">
-            <el-option v-for="p in candidates" :key="p.patientId"
-              :label="`${p.name}　${p.inpatientNo}　${p.surgeryName}`" :value="p.patientId" />
+            <el-option v-for="p in pool" :key="p.patientId" :value="p.patientId" :disabled="!canSchedule(p)"
+              :label="`${p.name}　${p.inpatientNo}　${p.surgeryName}${canSchedule(p) ? '' : '（评估未通过）'}`">
+              <span style="display:flex;align-items:center;gap:8px">
+                <span>{{ p.name }}　<span class="tiny mono">{{ p.inpatientNo }}</span>　{{ p.surgeryName }}</span>
+                <el-tag size="small" :type="evalSummary(p).type" effect="plain" style="margin-left:auto">
+                  {{ evalSummary(p).label }}
+                </el-tag>
+              </span>
+            </el-option>
+            <template #empty>
+              <div class="tiny" style="padding:12px;text-align:center;color:#8a94a6">
+                术前准备中暂无患者，可先在「入院登记 / 术前评估」流程推进
+              </div>
+            </template>
           </el-select>
           <div v-if="createPatient" class="tiny mt8">
             {{ createPatient.surgeryName }} · {{ createPatient.diagnosis }} · 拟手术日 {{ createPatient.plannedSurgeryDate }}
@@ -319,9 +335,11 @@ import { ElMessage } from 'element-plus'
 import { Plus, ArrowLeft, ArrowRight, MagicStick, Warning } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { SURGERY_ROOMS, SURGERY_SEQS, ANESTHESIA_TYPES, CANCEL_REASONS } from '@/mock/dict'
+import { state } from '@/store/db'
 import { get as getPatient } from '@/store/patients'
 import * as sched from '@/store/schedules'
 import { latest } from '@/store/evals'
+import { canSchedule, evalSummary } from '@/utils/guard'
 import ScheduleCard from '@/components/ScheduleCard.vue'
 import { fmtDateCn, fmtAmount } from '@/utils/format'
 import { accountOf } from '@/store/accounts'
@@ -350,6 +368,8 @@ const adjustForm = reactive({ surgeryDate: '', room: '', seq: 1, surgeon: '', re
 const dateLabel = computed(() => fmtDateCn(date.value))
 const daySchedules = computed(() => sched.byDate(date.value).sort((a, b) => a.seq - b.seq))
 const candidates = computed(() => sched.scheduleable())
+/** 术前准备中的全部患者（含评估未通过的，下拉/卡片置灰展示，保证与其他页面数据互通可见） */
+const pool = computed(() => state.patients.filter((p) => p.status === 'DAY_SURGERY'))
 const createPatient = computed(() => getPatient(createForm.patientId))
 const evalMethod = computed(() => {
   const rec = latest(createForm.patientId, 'ANESTHESIA')

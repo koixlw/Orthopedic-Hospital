@@ -147,12 +147,18 @@
       </template>
     </el-dialog>
   </div>
-  <PickPatient v-else to="/charge" />
+  <div v-else class="card">
+    <div class="empty" style="padding:70px 0">
+      <div class="big">—</div>
+      未找到该患者
+      <div class="mt8"><el-button type="primary" @click="router.push('/charge')">返回手术费用列表</el-button></div>
+    </div>
+  </div>
 </template>
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { fmtAmount, round2 } from '@/utils/format'
@@ -162,9 +168,9 @@ import { activeSchedule } from '@/store/schedules'
 import * as chg from '@/store/charges'
 import { VOID_REASONS } from '@/mock/dict'
 import PatientHeader from '@/components/PatientHeader.vue'
-import PickPatient from '@/components/PickPatient.vue'
 
 const route = useRoute()
+const router = useRouter()
 const tab = ref('manual')
 const groupId = ref('')
 const newItemCode = ref('')

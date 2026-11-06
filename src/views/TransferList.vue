@@ -60,12 +60,14 @@
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" :disabled="!canTransfer(row)" @click="go(row)">
-              转普通住院
-            </el-button>
-            <el-tooltip :disabled="canTransfer(row)" content="仅「已入院 / 术中 / 普通住院」状态可办理" placement="top">
-              <span></span>
-            </el-tooltip>
+            <el-button
+              link
+              type="primary"
+              size="small"
+              :disabled="!canTransfer(row)"
+              :title="canTransfer(row) ? '' : '仅「已入院 / 术中 / 普通住院」状态可办理'"
+              @click="go(row)"
+            >转普通住院</el-button>
           </template>
         </el-table-column>
         <template #empty>
