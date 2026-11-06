@@ -1,4 +1,5 @@
 export * as db from './db'
+export * as his from './his'
 export * as logs from './logs'
 export * as session from './session'
 export * as patients from './patients'
