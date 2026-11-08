@@ -167,10 +167,16 @@ export function seedPatients() {
       idCard: '5101**********5583', phone: '139****1177', dept: '创伤骨科', bedNo: '',
       admissionCertNo: 'RJ2026020', surgeryName: '骨折内固定取出术', surgeryCode: '78.6300',
       plannedSurgeryDate: d(-1), surgeon: '张海涛', surgeryRoom: '',
-      diagnosis: '左股骨骨折术后（内固定存留）', status: 'DAY_SURGERY',
+      diagnosis: '左股骨骨折术后（内固定存留）', status: 'WITHDRAWN',
       allergy: '无', applyId: 'APL018', nurse: '陈静',
       evalStatus: { specialist: 'FAILED', anesthesia: 'PENDING' }, evalFailReason: '感染未控制',
-      admissionInfo: null, transferInfo: null, withdrawInfo: null, statusLogs: []
+      admissionInfo: null, transferInfo: null,
+      // 专科评估不通过 → 自动退出日间手术路径；冻结金额仍待收费员解冻
+      withdrawInfo: {
+        reason: '评估不通过', note: '感染未控制：切口区红肿渗液，CRP 68mg/L',
+        at: dt(-1, 9, 45), operator: '系统自动', auto: true
+      },
+      statusLogs: []
     },
     {
       patientId: 'P014', name: '尹春燕', gender: '女', age: 49, inpatientNo: 'D2026021',
@@ -1101,6 +1107,8 @@ export function seedLogs() {
       null, { 住院号: 'D2026020', 患者状态: '术前准备' }, '从申请单 APL20261103018 建档'),
     mkLog(34, dt(-1, 9, 40, 55), '张海涛', '医生', 'EVL', '术前评估', 'CREATE', '术前评估', 'EVL012', '卢长海 专科评估', 'P013',
       { 专科评估: '待评估' }, { 结论: '不通过', 评估类型: '专科评估', 未通过原因: '感染未控制' }, '切口区红肿渗液，CRP 68mg/L，感染未控制，不符合日间手术准入标准'),
+    mkLog(44, dt(-1, 9, 45, 2), '系统自动', '系统', 'DEP', '储值金管理', 'STATUS', '患者', 'D2026020', '卢长海 D2026020', 'P013',
+      { 患者状态: '术前准备' }, { 患者状态: '已退出', 退出原因: '评估不通过' }, '评估不通过自动退出：感染未控制：切口区红肿渗液，CRP 68mg/L'),
     // 尹春燕 P014：评估不通过（麻醉）→ 已自动退出
     mkLog(35, dt(-7, 14, 5, 33), '陈静', '护士', 'APL', '手术申请', 'CREATE', '申请单', 'APL20261103019', '尹春燕 D2026021', 'P014',
       null, { 申请单号: 'APL20261103019', 业务模式: '手术麻醉' }, '接收 HIS 日间手术申请单'),
@@ -1132,7 +1140,8 @@ export const ANESTHESIA_TYPES = ['全身麻醉', '椎管内麻醉', '神经阻�
 export const BIZ_MODES = ['手术麻醉', '手术不麻醉', '麻醉不手术']
 export const TRANSFER_REASONS = ['病情变化需继续治疗', '术式变更', '术后出现并发症', '患者及家属要求', '其他']
 export const TRANSFER_METHODS = ['原床转住院', '转科', '重新开具住院证']
-export const WITHDRAW_REASONS = ['评估不通过', '患者放弃手术', '其他原因']
+// 手工发起退出日间手术的退出原因；「评估不通过」为系统自动退出，不在此列
+export const WITHDRAW_REASONS = ['患者放弃', '其他']
 export const CANCEL_REASONS = ['患者放弃手术', '评估需复评', '手术室资源调整', '其他']
 export const VOID_REASONS = ['组套选错', '重复录入', '患者取消手术', '其他']
 export const REVERSE_REASONS = ['患者退费', '金额录入错误', '重复缴存', '其他']

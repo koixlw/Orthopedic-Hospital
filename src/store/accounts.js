@@ -279,22 +279,70 @@ export function transferIn(patientId) {
   return { account }
 }
 
-/* ---------------- FUNC-DEP-004 退出日间手术并门诊结算 ▲ ----------------
- * 按分单分别结算：每张冻结分单各自生成一张结算单、各自退回余额
+/* ---------------- FUNC-DEP-004 发起退出日间手术 ▲ ----------------
+ * 只退出日间手术路径，不动资金：冻结金额仍需由收费员办理解冻与门诊结算
+ * opts.auto = true 时为系统自动退出（评估不通过触发），不校验操作岗位
  */
-export function withdraw(patientId, reason, note = '', chargedLines = DEFAULT_CHARGED) {
-  assertCan('dep.withdraw', { module: 'DEP', page: '储值金管理', action: 'UPDATE', label: '办理退出结算', targetType: '储值金账户' })
-  const account = accountOf(patientId)
-  if (!account) throw new Error('该患者尚未建立储值金账户')
+export function exitDaySurgery(patientId, reason, note = '', opts = {}) {
+  if (!opts.auto) {
+    assertCan('dep.exit', { module: 'DEP', page: '储值金管理', action: 'STATUS', label: '发起退出日间手术', targetType: '患者' })
+  }
   if (!reason) throw new Error('请选择退出原因')
   const patient = getPatient(patientId)
+  if (!patient) throw new Error('未找到该患者')
+  if (['WITHDRAWN', 'DISCHARGED'].includes(patient.status)) throw new Error('该患者已结束日间手术流程')
+  const account = accountOf(patientId)
+  if (account && account.status === 'TRANSFERRED_IN') {
+    throw new Error('储值金已转入住院账户，不能按退出日间手术处理')
+  }
 
-  if (account.status === 'TRANSFERRED_IN') throw new Error('储值金已转入住院账户，不能按退出日间手术处理')
-  if (account.status === 'SETTLED') throw new Error('该账户已完成门诊结算，不能重复退出')
+  const before = { 患者状态: patient.status }
+  const at = fmtTime(new Date())
+  patient.withdrawInfo = {
+    reason,
+    note,
+    at,
+    operator: opts.auto ? '系统自动' : state.session.name,
+    auto: !!opts.auto
+  }
+  goStatus(patient, 'WITHDRAWN', {
+    by: patient.withdrawInfo.operator,
+    text: (opts.auto ? '评估不通过，自动退出日间手术：' : '发起退出日间手术：') + reason
+  })
+
+  log({
+    module: 'DEP', page: '储值金管理', action: 'STATUS',
+    targetType: '患者', targetId: patient.inpatientNo, targetName: patientLabel(patientId),
+    patientId, before, after: { 患者状态: '已退出', 退出原因: reason },
+    reason: (opts.auto ? '评估不通过自动退出：' : '发起退出日间手术：') + reason + (note ? '（' + note + '）' : '')
+  })
+  persist()
+  return patient
+}
+
+/* ---------------- FUNC-DEP-005 解冻储值金并门诊结算 ▲ ----------------
+ * 收费员操作：必须已满足退出条件（手工发起退出 / 评估不通过自动退出），
+ * 否则提示「当前手术未完成，无法解除冻结」
+ * 按分单分别结算：每张冻结分单各自生成一张结算单、各自退回余额
+ */
+export function unfreeze(patientId, chargedLines = DEFAULT_CHARGED) {
+  assertCan('dep.unfreeze', { module: 'DEP', page: '储值金管理', action: 'UPDATE', label: '解冻储值金并门诊结算', targetType: '储值金账户' })
+  const account = accountOf(patientId)
+  if (!account) throw new Error('该患者尚未建立储值金账户')
+  const patient = getPatient(patientId)
+
+  // 解冻前置条件：必须已退出日间手术路径
+  if (!patient || patient.status !== 'WITHDRAWN') {
+    throw new Error('当前手术未完成，无法解除冻结')
+  }
+  if (account.status === 'SETTLED') throw new Error('该账户已完成门诊结算，不能重复解冻')
+  if (account.status === 'TRANSFERRED_IN') throw new Error('储值金已转入住院账户，无法解冻')
 
   const subs = (account.subOrders || []).filter((s) => Number(s.frozen) > 0 && s.status !== 'SETTLED')
-  if (!subs.length) throw new Error('该账户没有可结算的冻结金额')
+  if (!subs.length) throw new Error('该账户没有可解冻的金额')
 
+  const reason = patient.withdrawInfo?.reason || '患者放弃'
+  const note = patient.withdrawInfo?.note || ''
   const before = {
     available: fmtAmount(account.available), frozen: fmtAmount(account.frozen),
     账户状态: ACCOUNT_STATUS[account.status]?.label || account.status
@@ -336,7 +384,7 @@ export function withdraw(patientId, reason, note = '', chargedLines = DEFAULT_CH
 
     pushFlow(
       account, 'OUTPATIENT_CHARGE', -total,
-      '退出日间手术，门诊结算：扣除已产生费用 ¥' + fmtAmount(chargedTotal) + '，退回 ¥' + fmtAmount(refund) +
+      '解冻并门诊结算：扣除已产生费用 ¥' + fmtAmount(chargedTotal) + '，退回 ¥' + fmtAmount(refund) +
         '（分单 ' + sub.orderNo + '）',
       { purpose: sub.purpose || '术前检查费用记账', applyNo: sub.orderNo, subOrderNo: sub.orderNo }
     )
@@ -348,14 +396,10 @@ export function withdraw(patientId, reason, note = '', chargedLines = DEFAULT_CH
 
   if (patient) {
     patient.withdrawInfo = {
-      reason,
-      note,
-      at: fmtTime(new Date()),
-      operator: state.session.name,
-      settleNo: account.settlement.settlementNo
-    }
-    if (!['WITHDRAWN', 'DISCHARGED'].includes(patient.status)) {
-      goStatus(patient, 'WITHDRAWN', { by: state.session.name, text: '退出日间手术：' + reason })
+      ...(patient.withdrawInfo || {}),
+      settleNo: account.settlement.settlementNo,
+      unfrozenAt: fmtTime(new Date()),
+      unfrozenBy: state.session.name
     }
   }
 
@@ -368,7 +412,7 @@ export function withdraw(patientId, reason, note = '', chargedLines = DEFAULT_CH
       费用合计: fmtAmount(account.consumed), 退回金额: fmtAmount(account.refunded),
       结算单号: settlements.map((s) => s.settlementNo).join('、')
     },
-    reason: '退出日间手术：' + reason + (note ? '（' + note + '）' : '')
+    reason: '解冻储值金并门诊结算：' + reason + (note ? '（' + note + '）' : '')
   })
   assertBalance(account)
   persist()

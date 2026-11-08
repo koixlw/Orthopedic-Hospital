@@ -141,7 +141,7 @@
                   <el-button v-if="canSchedule(row) && can('sch.create')" link type="primary" size="small"
                     @click="go('/schedule?patient=' + row.patientId)">创建预约</el-button>
                   <el-button v-if="can('deposit')" link type="primary" size="small" @click="go('/deposit/' + row.patientId)">储值金</el-button>
-                  <el-button v-if="can('dep.withdraw')" link type="danger" size="small" @click="openWithdraw(row)">退出</el-button>
+                  <el-button v-if="can('dep.exit')" link type="danger" size="small" @click="openWithdraw(row)">退出</el-button>
                 </template>
 
                 <template v-if="row.status === 'SCHEDULED'">
@@ -284,13 +284,14 @@
       </div>
     </div>
 
-    <el-dialog v-model="withdrawDlg" title="退出日间手术" width="480px">
+    <el-dialog v-model="withdrawDlg" title="发起退出日间手术" width="480px">
       <div v-if="withdrawTarget">
         <div class="hint-box">
           <el-icon><Warning /></el-icon>
           <div>
-            将为患者 <b>{{ withdrawTarget.name }}（{{ withdrawTarget.inpatientNo }}）</b> 生成门诊结算单，
-            冻结金额解冻后扣除已产生门诊费用，余额退回。退出后患者流程结束，不可再执行其他业务操作。
+            将为患者 <b>{{ withdrawTarget.name }}（{{ withdrawTarget.inpatientNo }}）</b> 发起退出日间手术，
+            退出后患者流程结束，不可再执行其他业务操作。
+            冻结金额仍保持专款专用，由<b>收费员</b>办理「解冻并门诊结算」后退回。
           </div>
         </div>
         <el-form label-width="88px" class="mt12">
@@ -299,7 +300,7 @@
               <el-radio v-for="r in WITHDRAW_REASONS" :key="r" :label="r">{{ r }}</el-radio>
             </el-radio-group>
           </el-form-item>
-          <el-form-item v-if="withdrawForm.reason === '其他原因'" label="补充说明" required>
+          <el-form-item v-if="withdrawForm.reason === '其他'" label="原因说明" required>
             <el-input v-model="withdrawForm.note" type="textarea" :rows="2" maxlength="100" show-word-limit
               placeholder="请填写退出日间手术的具体原因" />
           </el-form-item>
@@ -307,7 +308,7 @@
       </div>
       <template #footer>
         <el-button @click="withdrawDlg = false">取消</el-button>
-        <el-button type="danger" @click="doWithdraw">确认退出并结算</el-button>
+        <el-button type="danger" @click="doWithdraw">确认退出</el-button>
       </template>
     </el-dialog>
   </div>
@@ -326,7 +327,7 @@ import { canSchedule, evalSummary } from '@/utils/guard'
 import { WITHDRAW_REASONS, PATIENT_STATUS, ACCOUNT_STATUS } from '@/mock/dict'
 import { can } from '@/store/session'
 import { log, query } from '@/store/logs'
-import { withdraw } from '@/store/accounts'
+import { exitDaySurgery } from '@/store/accounts'
 
 const router = useRouter()
 const tab = ref('unplanned')
@@ -459,19 +460,18 @@ function saveBed(row) {
 
 function openWithdraw(row) {
   withdrawTarget.value = row
-  withdrawForm.reason = row.evalFailReason ? '评估不通过' : ''
-  withdrawForm.note = row.evalFailReason || ''
+  withdrawForm.reason = ''
+  withdrawForm.note = ''
   withdrawDlg.value = true
 }
 
 function doWithdraw() {
   if (!withdrawForm.reason) return ElMessage.warning('请选择退出原因')
-  if (withdrawForm.reason === '其他原因' && !withdrawForm.note) return ElMessage.warning('选择「其他原因」时必须填写补充说明')
+  if (withdrawForm.reason === '其他' && !withdrawForm.note) return ElMessage.warning('选择「其他」时必须填写原因说明')
   try {
-    const list = withdraw(withdrawTarget.value.patientId, withdrawForm.reason, withdrawForm.note)
+    exitDaySurgery(withdrawTarget.value.patientId, withdrawForm.reason, withdrawForm.note)
     withdrawDlg.value = false
-    const refund = list.reduce((s, x) => s + x.refund, 0)
-    ElMessage.success(`已退出日间手术，生成 ${list.length} 张分单结算单，退回 ¥${refund.toFixed(2)}`)
+    ElMessage.success('已发起退出日间手术，冻结金额待收费员办理「解冻并门诊结算」')
   } catch (e) { ElMessage.error(e.message) }
 }
 

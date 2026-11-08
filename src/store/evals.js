@@ -4,6 +4,7 @@ import { assertCan } from '@/utils/guard'
 import { state, persist } from './db'
 import { log } from './logs'
 import { get as getPatient } from './patients'
+import { exitDaySurgery } from './accounts'
 import { fmtTime } from '@/utils/format'
 
 export const SPECIALIST = 'SPECIALIST'
@@ -152,6 +153,8 @@ export function submitSpecialist(patientId, form) {
     reason: record.reason ? record.reason + (record.reasonNote ? '：' + record.reasonNote : '') : (form.opinion || '术前检查报告齐全，准予进入日间手术流程')
   })
   persist()
+  // 专科评估不通过 → 自动退出日间手术路径（招标第 16 项）
+  if (form.conclusion === 'FAILED') autoExit(p, record)
   return record
 }
 
@@ -210,7 +213,24 @@ export function submitAnesthesia(patientId, form) {
     reason: record.riskNote || record.reason || form.opinion || '麻醉评估'
   })
   persist()
+  // 麻醉评估不通过 → 自动退出日间手术路径（招标第 16 项）
+  if (form.conclusion === 'FAILED') autoExit(p, record)
   return record
+}
+
+/**
+ * 评估不通过 → 自动退出日间手术路径
+ * 只退路径，不动资金：冻结金额由收费员另行办理解冻与门诊结算
+ */
+function autoExit(patient, record) {
+  if (!patient) return
+  if (['WITHDRAWN', 'DISCHARGED'].includes(patient.status)) return
+  const note = record.reasonNote ? record.reason + '：' + record.reasonNote : record.reason
+  try {
+    exitDaySurgery(patient.patientId, '评估不通过', note, { auto: true })
+  } catch (e) {
+    console.error('[autoExit] 自动退出日间手术失败', e)
+  }
 }
 
 /** 取该患者最近一次不通过的原因（退出日间手术时自动预填，RULE-EVL-002 衔接） */

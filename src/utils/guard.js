@@ -116,7 +116,7 @@ export const PERM_LABEL = {
   'eval.submit': '提交评估结论',
   'sch.create': '创建手术预约', 'sch.adjust': '调整手术安排', 'sch.cancel': '取消手术预约',
   'dep.deposit': '办理储值金缴存', 'dep.freeze': '冻结储值金', 'dep.transfer': '转入住院储值金',
-  'dep.withdraw': '办理退出结算', 'dep.reverse': '冲正储值金流水',
+  'dep.exit': '发起退出日间手术', 'dep.unfreeze': '解冻储值金并门诊结算', 'dep.reverse': '冲正储值金流水',
   'adm.confirm': '办理入院登记', 'adm.modify': '修改入院信息', 'adm.revoke': '撤销入院登记',
   'chk.confirm': '确认手术报到', 'chk.cancel': '取消报到', 'chk.print': '打印知情同意书',
   'chg.add': '录入手术费用', 'chg.import': '调入费用组套', 'chg.submit': '提交费用单',
@@ -140,7 +140,7 @@ const GRANTS = {
     'workbench', 'apply', 'schedule', 'deposit', 'admission', 'checkin', 'order', 'message', 'trace',
     'apply.receive', 'apply.build',            // FUNC-APL-001 接收申请单、FUNC-BAS-003 从申请单建档
     'sch.create', 'sch.adjust', 'sch.cancel',  // FUNC-SCH-001/003/004
-    'dep.transfer', 'dep.withdraw',            // FUNC-DEP-003 转入住院储值金、FUNC-DEP-004 退出并门诊结算
+    'dep.transfer', 'dep.exit',                // FUNC-DEP-003 转入住院储值金、FUNC-DEP-004 发起退出日间手术
     'adm.confirm', 'adm.modify', 'adm.revoke', // FUNC-ADM-002/004/005
     'chk.confirm', 'chk.cancel', 'chk.print',  // FUNC-CIR-001/002/003
     'msg.resend', 'msg.send'                   // FUNC-MSG-001/003 重发通知、执行通知任务（模板编辑仅管理员）
@@ -148,13 +148,14 @@ const GRANTS = {
   CASHIER: [
     // 钱箱角色：缴存、冻结、冲正、门诊结算；不含「转入住院储值金」（DEP-003 属护士）
     'workbench', 'deposit', 'trace',
-    'dep.deposit', 'dep.freeze', 'dep.withdraw', 'dep.reverse' // FUNC-DEP-001/002/004/006
+    'dep.deposit', 'dep.freeze', 'dep.unfreeze', 'dep.reverse' // FUNC-DEP-001/002/005/006（收费员解冻并门诊结算）
   ],
   DOCTOR: [
     'workbench', 'apply', 'evaluate', 'charge', 'order', 'transfer', 'trace',
     'apply.correct', 'apply.return',           // FUNC-APL-002/003 开单医师修正、退回申请单
     'eval.submit',                            // FUNC-EVL-003/004（评估结论不可撤销，无撤销权限）
     'chg.add', 'chg.import', 'chg.submit', 'chg.void', 'chg.reenter', // FUNC-CHG-001~006
+    'dep.exit',                                // FUNC-DEP-004 发起退出日间手术（医生 / 护士 / 管理员）
     'ord.add', 'ord.submit', 'ord.stop', 'ord.void', 'ord.remove',    // FUNC-ORD-001/002/003/004/005
     'trf.submit', 'trf.revoke'                 // FUNC-TRF-001/004
   ],

@@ -114,7 +114,8 @@
             <el-button v-if="account.status === 'TRANSFERRED_IN'" disabled>已转入住院账户</el-button>
             <el-button v-if="account.status === 'TRANSFERRED_IN'" @click="viewInpatient">查看住院储值金</el-button>
             <el-button v-if="account.status === 'SETTLED'" @click="viewSettlement">查看门诊结算单</el-button>
-            <el-button v-if="canWithdraw && can('dep.withdraw')" type="danger" plain @click="openWithdraw">退出日间手术</el-button>
+            <el-button v-if="hasFrozenSub && can('dep.unfreeze')" type="warning" plain @click="doUnfreeze">解冻并门诊结算</el-button>
+            <el-button v-if="canExit && can('dep.exit')" type="danger" plain @click="openWithdraw">退出日间手术</el-button>
           </div>
         </div>
 
@@ -349,28 +350,31 @@
     </el-dialog>
 
     <!-- 退出 -->
-    <el-dialog v-model="withdrawDlg" title="退出日间手术并门诊结算" width="520px">
+    <el-dialog v-model="withdrawDlg" title="发起退出日间手术" width="520px">
       <el-form label-width="88px">
         <el-form-item label="退出原因" required>
           <el-radio-group v-model="withdrawForm.reason">
             <el-radio v-for="r in WITHDRAW_REASONS" :key="r" :label="r">{{ r }}</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item v-if="withdrawForm.reason === '其他原因'" label="补充说明" required>
-          <el-input v-model="withdrawForm.note" type="textarea" :rows="2" />
+        <el-form-item v-if="withdrawForm.reason === '其他'" label="原因说明" required>
+          <el-input v-model="withdrawForm.note" type="textarea" :rows="2" maxlength="200" show-word-limit
+            placeholder="选择「其他」时必须填写具体原因" />
         </el-form-item>
       </el-form>
-      <div v-if="hasFrozenSub" class="hint-box warn">
+      <div class="hint-box warn">
         <el-icon><Warning /></el-icon>
-        <div>退出后按分单分别结算（{{ subOrders.length }} 张分单），冻结金额解冻并扣除已产生门诊费用，余额退回。患者流程结束。</div>
-      </div>
-      <div v-else class="hint-box warn">
-        <el-icon><Warning /></el-icon>
-        <div>该账户当前没有冻结金额，退出后直接按账户余额退回。患者流程结束。</div>
+        <div>
+          退出后患者结束日间手术流程。
+          <template v-if="hasFrozenSub">
+            冻结金额仍保持专款专用，由<b>收费员</b>办理「解冻并门诊结算」后按分单分别退回。
+          </template>
+          <template v-else>该账户当前没有冻结金额，无需解冻。</template>
+        </div>
       </div>
       <template #footer>
         <el-button @click="withdrawDlg = false">取消</el-button>
-        <el-button type="danger" @click="doWithdraw">确认退出并结算</el-button>
+        <el-button type="danger" @click="doWithdraw">确认退出</el-button>
       </template>
     </el-dialog>
 
@@ -513,10 +517,13 @@ const settlements = computed(() => {
 })
 const hasFrozenSub = computed(() => subOrders.value.some((s) => Number(s.frozen) > 0 && s.status !== 'SETTLED'))
 const canFreeze = computed(() => !!account.value && account.value.status !== 'SETTLED' && Number(account.value.available) > 0)
-// 退出日间手术：已冻结或仍有可用余额都可办理
-const canWithdraw = computed(() =>
-  !!account.value && account.value.status !== 'SETTLED' &&
+// 可发起退出：未结束日间手术流程、储值金未转入住院
+const canExit = computed(() =>
+  !!account.value && account.value.status !== 'SETTLED' && account.value.status !== 'TRANSFERRED_IN' &&
   patient.value && !['WITHDRAWN', 'DISCHARGED'].includes(patient.value.status))
+// 已满足退出条件（手工发起退出 / 评估不通过自动退出）才可解冻
+const canUnfreeze = computed(() =>
+  !!patient.value && patient.value.status === 'WITHDRAWN' && hasFrozenSub.value)
 
 // 本患者留痕：按时间倒序取最新 6 条（日志本身只追加，不改动）
 const accountLogs = computed(() => {
@@ -621,20 +628,42 @@ function doDeposit() {
 }
 
 function openWithdraw() {
-  withdrawForm.reason = patient.value.evalFailReason ? '评估不通过' : ''
-  withdrawForm.note = patient.value.evalFailReason || ''
+  withdrawForm.reason = ''
+  withdrawForm.note = ''
   withdrawDlg.value = true
 }
 
 function doWithdraw() {
   if (!withdrawForm.reason) return ElMessage.warning('请选择退出原因')
-  if (withdrawForm.reason === '其他原因' && !withdrawForm.note) return ElMessage.warning('选择「其他原因」时必须填写补充说明')
+  if (withdrawForm.reason === '其他' && !withdrawForm.note) return ElMessage.warning('选择「其他」时必须填写原因说明')
   try {
-    const list = accStore.withdraw(patient.value.patientId, withdrawForm.reason, withdrawForm.note)
+    accStore.exitDaySurgery(patient.value.patientId, withdrawForm.reason, withdrawForm.note)
     withdrawDlg.value = false
-    settleDlg.value = true
-    ElMessage.success(`已退出日间手术，生成 ${list.length} 张分单结算单`)
+    ElMessage.success(
+      hasFrozenSub.value
+        ? '已发起退出日间手术，冻结金额待收费员办理「解冻并门诊结算」'
+        : '已发起退出日间手术，患者流程结束'
+    )
   } catch (e) { ElMessage.error(e.message) }
+}
+
+/** 收费员解冻：未满足退出条件时提示「当前手术未完成，无法解除冻结」 */
+function doUnfreeze() {
+  if (!canUnfreeze.value) {
+    ElMessage.warning('当前手术未完成，无法解除冻结')
+    return
+  }
+  ElMessageBox.confirm(
+    `确认解冻患者${patient.value.name}的冻结储值金 ¥${fmtAmount(account.value.frozen)}？` +
+    `解冻后按分单分别结算，扣除已产生的门诊费用后余额退回患者。`,
+    '解冻并门诊结算', { type: 'warning', confirmButtonText: '确认解冻', cancelButtonText: '取消' }
+  ).then(() => {
+    try {
+      const list = accStore.unfreeze(patient.value.patientId)
+      settleDlg.value = true
+      ElMessage.success(`已解冻并结算，生成 ${list.length} 张分单结算单`)
+    } catch (e) { ElMessage.warning(e.message) }
+  }).catch(() => {})
 }
 
 function fakePrint() {
