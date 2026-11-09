@@ -1,15 +1,20 @@
 // 全局响应式状态 + localStorage 持久化（5.8）
-// 键名固定 PREOP_DEMO_V7；读不到就用种子数据，不做版本兼容迁移
+// 键名固定 PREOP_DEMO_V9；读不到就用种子数据，不做版本兼容迁移
 import { reactive } from 'vue'
 import {
   seedPatients, seedAccounts, seedApplies, seedEvals, seedSchedules,
   seedCheckins, seedMessages, seedSettings, seedChargeItems, seedDrugs,
   seedGroups, seedEvalReasons, seedCharges, seedOrders, seedLogs,
-  seedTemplates, DEFAULT_TEMPLATES
+  seedTemplates, DEFAULT_TEMPLATES, TODAY, reportProgressOf
 } from '@/mock/dict'
+import {
+  extraPatients, extraAccounts, extraApplies, extraEvals, extraSchedules,
+  extraCheckins, extraMessages, extraCharges, extraOrders,
+  extraChargeItems, extraGroups, buildExtraLogs
+} from '@/mock/extra'
 
-// 键名固定 PREOP_DEMO_V7；读不到就用种子数据，不做版本兼容迁移
-export const STORAGE_KEY = 'PREOP_DEMO_V7'
+// 键名固定 PREOP_DEMO_V9；读不到就用种子数据，不做版本兼容迁移
+export const STORAGE_KEY = 'PREOP_DEMO_V9'
 export const LOG_MAX = 2000
 // 默认登录为演示管理员：拥有全部权限，打开即进主界面（4.1 演示默认角色）
 export const DEFAULT_SESSION = { role: 'ADMIN', name: '李伟', roleLabel: '系统管理员', account: 'A0001', loggedIn: true, loginAt: '' }
@@ -38,24 +43,27 @@ function emptyState() {
 export const state = reactive(emptyState())
 
 export function seedAll() {
+  // 初始种子（dict.js）覆盖「每个状态一个主角」；补充种子（extra.js）覆盖其余业务分支
   state.patients = seedPatients()
-  state.accounts = seedAccounts()
-  state.applies = seedApplies()
-  state.evals = seedEvals()
-  state.schedules = seedSchedules()
-  state.checkins = seedCheckins()
-  state.messages = seedMessages()
-  state.charges = seedCharges()
-  state.orders = seedOrders()
+    .concat(extraPatients)
+    .map((p) => ({ ...p, reportProgress: p.reportProgress || reportProgressOf(p.patientId) }))
+  state.accounts = seedAccounts().concat(extraAccounts)
+  state.applies = seedApplies().concat(extraApplies)
+  state.evals = seedEvals().concat(extraEvals)
+  state.schedules = seedSchedules().concat(extraSchedules)
+  state.checkins = seedCheckins().concat(extraCheckins)
+  state.messages = seedMessages().concat(extraMessages)
+  state.charges = seedCharges().concat(extraCharges)
+  state.orders = seedOrders().concat(extraOrders)
   state.dicts = {
-    items: seedChargeItems(),
+    items: seedChargeItems().concat(extraChargeItems),
     drugs: seedDrugs(),
-    groups: seedGroups(),
+    groups: seedGroups().concat(extraGroups),
     evalReasons: seedEvalReasons()
   }
   state.settings = seedSettings()
   state.templates = seedTemplates()
-  const logs = seedLogs()
+  const logs = seedLogs().concat(buildExtraLogs(seedLogs().length + 1))
   state.logs = { list: logs, seq: logs.length, overflow: false }
   state.session = { ...DEFAULT_SESSION }
   state.currentPatientId = 'P001'
@@ -105,6 +113,16 @@ export function hydrate() {
     if (state.session.loggedIn === undefined) state.session.loggedIn = true
     if (!state.settings || !state.settings.updatedAt) {
       state.settings = { ...seedSettings(), ...(state.settings || {}) }
+    }
+    // 演示数据是相对今天生成的：缓存快照里若今天没有排程、也没有未来排程，
+    // 说明这份快照已经过期（换了一天），重新播种，保证「今日待报到」始终有素材
+    const hasToday = state.schedules.some((s) => s.surgeryDate === TODAY)
+    const hasFuture = state.schedules.some((s) => s.surgeryDate > TODAY)
+    if (!hasToday && !hasFuture) {
+      console.info('[hydrate] 演示数据快照已过期，按今天重新播种')
+      seedAll()
+      persist()
+      return
     }
     // 模板是后加的：旧缓存补默认，缺哪个补哪个，不覆盖已改过的正文
     if (!Array.isArray(state.templates) || !state.templates.length) {

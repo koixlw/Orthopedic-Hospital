@@ -106,7 +106,7 @@ export const PAGE_LABEL = {
   workbench: '工作台', apply: '日间手术申请', evaluate: '术前评估', schedule: '手术排程',
   deposit: '储值金管理', admission: '入院登记', checkin: '手术报到', charge: '手术费用',
   order: '手术医嘱', transfer: '转普通入院', dict: '基础字典', message: '消息通知',
-  log: '操作日志', trace: '患者轨迹', setting: '系统参数'
+  log: '操作日志', trace: '患者轨迹', setting: '系统参数', report: '手术查询'
 }
 
 /** 动作级权限码：用于失败日志里拼出可读原因，不写 permission denied */
@@ -136,8 +136,8 @@ export const PERM_LABEL = {
 const GRANTS = {
   // 逐条对照《开发任务单》的「功能—角色矩阵」，每个权限码后面标注来源功能编号
   NURSE: [
-    // 页面：申请、排程、储值金（只做转入与退出，不碰钱箱）、入院、报到、医嘱（只读）、消息、轨迹
-    'workbench', 'apply', 'schedule', 'deposit', 'admission', 'checkin', 'order', 'message', 'trace',
+    // 页面：申请、排程、储值金（只做转入与退出，不碰钱箱）、入院、报到、医嘱（只读）、消息、轨迹、手术查询
+    'workbench', 'apply', 'schedule', 'deposit', 'admission', 'checkin', 'order', 'message', 'trace', 'report',
     'apply.receive', 'apply.build',            // FUNC-APL-001 接收申请单、FUNC-BAS-003 从申请单建档
     'sch.create', 'sch.adjust', 'sch.cancel',  // FUNC-SCH-001/003/004
     'dep.transfer', 'dep.exit',                // FUNC-DEP-003 转入住院储值金、FUNC-DEP-004 发起退出日间手术
@@ -151,7 +151,7 @@ const GRANTS = {
     'dep.deposit', 'dep.freeze', 'dep.unfreeze', 'dep.reverse' // FUNC-DEP-001/002/005/006（收费员解冻并门诊结算）
   ],
   DOCTOR: [
-    'workbench', 'apply', 'evaluate', 'charge', 'order', 'transfer', 'trace',
+    'workbench', 'apply', 'evaluate', 'charge', 'order', 'transfer', 'trace', 'report',
     'apply.correct', 'apply.return',           // FUNC-APL-002/003 开单医师修正、退回申请单
     'eval.submit',                            // FUNC-EVL-003/004（评估结论不可撤销，无撤销权限）
     'chg.add', 'chg.import', 'chg.submit', 'chg.void', 'chg.reenter', // FUNC-CHG-001~006

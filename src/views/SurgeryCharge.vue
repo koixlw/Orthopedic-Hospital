@@ -49,12 +49,22 @@
         </div>
 
         <div class="toolbar" v-if="tab === 'manual'">
-          <el-select v-model="newItemCode" filterable placeholder="搜索收费项目（编码 / 名称）" style="width:320px">
-            <el-option v-for="it in chargeItems" :key="it.code" :label="`${it.name}　${it.spec}　¥${fmtAmount(it.price)}`" :value="it.code" />
+          <el-select v-model="newItemCode" filterable :filter-method="filterItem" placeholder="搜索收费项目（编码 / 名称）"
+            popper-class="charge-item-popper" style="width:320px">
+            <el-option v-for="it in filteredItems" :key="it.code" :value="it.code" :disabled="isAdded(it.code)"
+              :label="`${it.name}　${it.spec}　¥${fmtAmount(it.price)}`">
+              <span class="opt-name">{{ it.name }}</span>
+              <span class="opt-spec">{{ it.spec }}</span>
+              <span class="opt-price">¥{{ fmtAmount(it.price) }}</span>
+              <span v-if="isAdded(it.code)" class="opt-flag">已录入</span>
+            </el-option>
           </el-select>
           <el-input-number v-model="newQty" :min="1" size="default" style="width:110px" />
           <el-button v-if="can('chg.add')" type="primary" :disabled="!newItemCode" @click="doAdd">添加一行</el-button>
           <span class="muted" style="margin-left:auto">已录入 {{ activeLines.length }} 项</span>
+        </div>
+        <div class="tiny muted mt8" v-if="tab === 'manual'">
+          已录入（未移除）的收费项目在下拉中置灰、不可重复添加；如需增加数量，请在下表「数量」列直接调整。
         </div>
       </template>
 
@@ -175,6 +185,7 @@ const tab = ref('manual')
 const groupId = ref('')
 const newItemCode = ref('')
 const newQty = ref(1)
+const itemKeyword = ref('')
 const showRemoved = ref(false)
 const showVoided = ref(false)
 const voidDlg = ref(false)
@@ -196,12 +207,28 @@ const chargeTag = computed(() => ({ DRAFT: 'info', SUBMITTED: 'success', VOIDED:
 const groups = computed(() => state.dicts.groups.filter((g) => g.enabled))
 const chargeItems = computed(() => state.dicts.items.filter((i) => i.enabled))
 
+// 自定义过滤：编码 / 名称 / 规格
+function filterItem(q) {
+  itemKeyword.value = q || ''
+}
+const filteredItems = computed(() => {
+  const kw = itemKeyword.value.trim().toLowerCase()
+  if (!kw) return chargeItems.value
+  return chargeItems.value.filter((i) => [i.code, i.name, i.spec].some((v) => String(v || '').toLowerCase().includes(kw)))
+})
+
 const visibleLines = computed(() => {
   const lines = charge.value?.lines || []
   return showRemoved.value ? lines : lines.filter((l) => !l.removed)
 })
 const activeLines = computed(() => (charge.value?.lines || []).filter((l) => !l.removed))
 const activeTotal = computed(() => round2(activeLines.value.reduce((s, l) => s + Number(l.amount), 0)))
+
+// 已录入（未移除）的收费项目编码：下拉中置灰，避免重复添加
+const addedCodes = computed(() => new Set(activeLines.value.map((l) => l.code).filter(Boolean)))
+function isAdded(code) {
+  return addedCodes.value.has(code)
+}
 
 function ensure() {
   if (charge.value && charge.value.status !== 'VOIDED') return charge.value
@@ -218,6 +245,7 @@ function onQtyChange(row) {
 function doAdd() {
   const item = chargeItems.value.find((i) => i.code === newItemCode.value)
   if (!item) return
+  if (isAdded(item.code)) return ElMessage.warning('该项目已录入，如需增加数量请在明细表的「数量」列调整')
   try {
     ensure()
     chg.addLine(patient.value.patientId, item, newQty.value)
@@ -305,3 +333,22 @@ function rowClass({ row }) {
   return row.removed || voidedCurrent.value ? 'row-void' : ''
 }
 </script>
+
+<!-- 下拉弹层挂到 body，样式不能写在 scoped 里 -->
+<style>
+.charge-item-popper { min-width: 460px !important; }
+.charge-item-popper .el-select-dropdown__item { display: flex; align-items: center; gap: 10px; }
+.charge-item-popper .opt-spec { color: var(--ink-3); font-size: 12px; }
+.charge-item-popper .opt-price { margin-left: auto; font-variant-numeric: tabular-nums; }
+/* 已录入的项目：整行置灰并标注，避免误点重复添加 */
+.charge-item-popper .opt-flag {
+  font-size: 11px; line-height: 16px; padding: 0 5px; border-radius: 3px;
+  color: var(--ink-3); border: 1px solid var(--line); background: #f4f6f9;
+}
+.charge-item-popper .el-select-dropdown__item.is-disabled,
+.charge-item-popper .el-select-dropdown__item.is-disabled .opt-spec,
+.charge-item-popper .el-select-dropdown__item.is-disabled .opt-price,
+.charge-item-popper .el-select-dropdown__item.is-disabled .opt-flag {
+  color: var(--el-text-color-placeholder);
+}
+</style>

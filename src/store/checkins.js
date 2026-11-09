@@ -9,9 +9,12 @@ import { goStatus, assertCan } from '@/utils/guard'
 import { fmtAmount, fmtDate, fmtTime } from '@/utils/format'
 import { TODAY } from '@/mock/dict'
 
+// ▲招标第 11 项：扫申请单条码 / 刷医保卡 / 刷就诊卡 / 刷身份证 / 手工输入病历号·申请单号
 export const CHECKIN_METHODS = {
   SCAN: '扫申请单条码',
-  CARD: '刷医保卡 / 就诊卡',
+  MEDICAL_CARD: '刷医保卡',
+  VISIT_CARD: '刷就诊卡',
+  ID_CARD: '刷身份证',
   MANUAL: '手工输入住院号'
 }
 
@@ -94,10 +97,11 @@ export function canCheckIn(patientId) {
 }
 
 /** FUNC-CIR-001 报到登记：校验快照入库 + 状态流转 + 排程置为已报到 */
-export function doCheckIn(patientId, method = '手工输入住院号') {
+export function doCheckIn(patientId, method = CHECKIN_METHODS.MANUAL) {
   assertCan('chk.confirm', { module: 'CIR', page: '手术报到', action: 'CREATE', label: '确认手术报到', targetType: '报到记录' })
   const p = getPatient(patientId)
   if (!p) throw new Error('未找到该患者')
+  if (!Object.values(CHECKIN_METHODS).includes(method)) throw new Error('报到方式无效，请重新选择报到方式')
   if (p.status === 'IN_SURGERY') throw new Error('该患者已完成报到，不能重复报到')
   const checks = preCheck(patientId)
   const bad = checks.filter((c) => !c.ok)

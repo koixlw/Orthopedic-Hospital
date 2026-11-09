@@ -12,8 +12,23 @@
         <div class="flex gap8 mt12">
           <el-button type="primary" style="flex:1" @click="doQuery">查询</el-button>
           <el-button @click="mockScan">模拟扫码</el-button>
-          <el-button @click="mockCard">刷就诊卡</el-button>
         </div>
+
+        <div class="divider-h"></div>
+        <div class="tiny">刷卡报到 · 招标第 11 项：刷医保卡 / 就诊卡 / 身份证</div>
+        <div class="mt8">
+          <el-select v-model="cardType" size="large" style="width:100%">
+            <el-option v-for="c in CARD_READ_TYPES" :key="c.value" :label="c.label" :value="c.value" />
+          </el-select>
+          <el-input v-model="cardNo" class="mt8" size="large" clearable
+            :placeholder="'请输入' + cardTypeOf(cardType).noLabel">
+            <template #prefix><el-icon><Postcard /></el-icon></template>
+          </el-input>
+        </div>
+        <el-button class="mt8" style="width:100%" :icon="Postcard" :loading="cardReading" @click="readByCard">
+          刷卡报到
+        </el-button>
+        <div class="tiny mt8">卡号留空直接点「刷卡报到」，由读卡器模拟刷出今日待报到患者的卡片。</div>
 
         <div class="divider-h"></div>
         <div class="flex" style="justify-content:space-between">
@@ -42,8 +57,8 @@
         <div v-if="!patient" class="card">
           <div class="empty" style="padding:90px 0">
             <div class="big">⇢</div>
-            请输入住院号或扫描申请单条码
-            <div class="tiny mt8">演示可点左侧「模拟扫码」自动带出今日待报到患者</div>
+            请输入住院号、扫描申请单条码或刷卡报到
+            <div class="tiny mt8">演示可点左侧「模拟扫码」或选择刷卡方式后点「刷卡报到」自动带出今日待报到患者</div>
           </div>
         </div>
 
@@ -99,6 +114,11 @@
               <div v-if="patient.status === 'IN_SURGERY'" class="notice-bar mt12">
                 <el-icon><CircleCheck /></el-icon>
                 该患者已完成报到，患者状态为「术中」，排程状态为「已报到」。报到后不可修改，如需撤回请使用「取消报到」。
+              </div>
+              <div v-else-if="patient.status !== 'ADMITTED'" class="notice-bar warn mt12">
+                <el-icon><Warning /></el-icon>
+                该患者当前状态为「{{ PATIENT_STATUS[patient.status]?.label || patient.status }}」，尚未办理入院登记，须先到「入院登记」调入住院证后才能报到。
+                <el-button link type="primary" size="small" @click="router.push('/admission/' + pid)">去入院登记</el-button>
               </div>
             </div>
           </div>
@@ -163,20 +183,76 @@
         <template #empty><div class="empty">暂无数据</div></template>
       </el-table>
     </el-dialog>
+
+    <!-- 手术知情同意书 · 套打模板预览 -->
+    <el-dialog v-model="consentDlg" title="手术知情同意书（套打模板预览）" width="780px" top="4vh">
+      <div class="notice-bar" style="margin-bottom:10px">
+        <el-icon><InfoFilled /></el-icon>
+        套打说明：空白单据已预印表头、栏目线与同意条款，打印机仅在填写区套打患者与手术信息；下页为打印效果预览。
+      </div>
+      <div class="consent-paper">
+        <div class="cp-head">
+          <div class="cp-hospital">{{ HOSPITAL_NAME }}</div>
+          <div class="cp-title">日间手术知情同意书</div>
+          <div class="cp-code">单据编号：ZRT-2024-CONS-03（套打版）</div>
+        </div>
+        <div class="cp-grid">
+          <span class="k">患者姓名</span><span class="fill w72">{{ patient?.name }}</span>
+          <span class="k">性别</span><span class="fill w40">{{ patient?.gender }}</span>
+          <span class="k">年龄</span><span class="fill w40">{{ patient?.age }} 岁</span>
+          <span class="k">住院号</span><span class="fill w96 mono">{{ patient?.inpatientNo }}</span>
+          <span class="k">科别</span><span class="fill w72">{{ patient?.dept }}</span>
+          <span class="k">床位</span><span class="fill w72">{{ patient?.bedNo || '未分配' }}</span>
+        </div>
+        <div class="cp-row">
+          <span class="k">术前诊断</span><span class="fill flex1">{{ patient?.diagnosis }}</span>
+        </div>
+        <div class="cp-row">
+          <span class="k">拟施手术</span><span class="fill flex1">{{ patient?.surgeryName }}（{{ patient?.surgeryCode }}）</span>
+        </div>
+        <div class="cp-grid">
+          <span class="k">手术医师</span><span class="fill w72">{{ schedule?.surgeon || patient?.surgeon }}</span>
+          <span class="k">麻醉方式</span><span class="fill w96">{{ schedule?.anesthesiaType || '—' }}</span>
+          <span class="k">麻醉医师</span><span class="fill w72">{{ schedule?.anesthesiologist || '—' }}</span>
+          <span class="k">手术日期</span><span class="fill w96 num">{{ schedule?.surgeryDate || patient?.plannedSurgeryDate }}</span>
+          <span class="k">手术间</span><span class="fill w72">{{ schedule?.room || patient?.surgeryRoom || '—' }}</span>
+          <span class="k">台次</span><span class="fill w40">{{ schedule?.seq ? '第 ' + schedule.seq + ' 台' : '—' }}</span>
+        </div>
+        <div class="cp-terms">
+          <div class="cp-terms-h">知情同意条款（预印，不参与套打）</div>
+          <ol>
+            <li>我已了解日间手术「入院、手术、出院 24—48 小时内完成」的模式及出院标准。</li>
+            <li>我理解麻醉意外、术中出血、周围组织损伤等手术风险，并同意实施上述麻醉与手术。</li>
+            <li>我同意术后按医嘱离院，出现发热、剧痛、出血等异常时立即返回医院急诊。</li>
+            <li>我授权医师在术中出现意外情况时，根据病情变更手术方式或中转普通住院治疗。</li>
+            <li>我已知晓手术费用从专项储值金中记账结算，多退少补。</li>
+            <li>本同意书一式两份，医患双方各执一份，自签字之日起生效。</li>
+          </ol>
+        </div>
+        <div class="cp-sign">
+          <div>患者签名：<span class="line"></span>　　与患者关系：<span class="line short"></span></div>
+          <div>谈话医师签名：<span class="line"></span>　　日期：<span class="line short"></span> 年 <span class="line xs"></span> 月 <span class="line xs"></span> 日</div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="consentDlg = false">关闭预览</el-button>
+        <el-button type="primary" :icon="Printer" @click="confirmPrint">确认打印</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Document, Printer, InfoFilled } from '@element-plus/icons-vue'
+import { Search, Document, Printer, InfoFilled, Postcard, Warning } from '@element-plus/icons-vue'
 import { state } from '@/store/db'
 import { get as getPatient } from '@/store/patients'
-import { preCheck, doCheckIn as checkInStore, cancelCheckIn, todaySchedules } from '@/store/checkins'
-import { PATIENT_STATUS } from '@/mock/dict'
-import { fetchExamReports } from '@/api/his'
+import { preCheck, doCheckIn as checkInStore, cancelCheckIn, todaySchedules, CHECKIN_METHODS } from '@/store/checkins'
+import { PATIENT_STATUS, CARD_READ_TYPES, cardTypeOf, cardNoOf } from '@/mock/dict'
+import { fetchExamReports, fetchPatientByCard } from '@/api/his'
 import { log } from '@/store/logs'
 import ExamList from '@/components/ExamList.vue'
 import ReportDrawer from '@/components/ReportDrawer.vue'
@@ -186,12 +262,23 @@ const router = useRouter()
 const keyword = ref('')
 const pid = ref(route.query.patient || '')
 // 报到方式：扫码 / 刷卡 / 手工输入，写入报到记录并可回溯
-const checkInMethod = ref('手工输入住院号')
+const checkInMethod = ref(CHECKIN_METHODS.MANUAL)
+// 刷卡方式：招标第 11 项，刷医保卡 / 就诊卡 / 身份证
+const cardType = ref('MEDICAL_CARD')
+const cardNo = ref('')
+const cardReading = ref(false)
 const reportDlg = ref(false)
 const oneDlg = ref(false)
 const oneReport = ref(null)
 const historyDlg = ref(false)
+const consentDlg = ref(false)
 const exams = ref([])
+
+// 套打模板抬头（与顶栏医院名一致）
+const HOSPITAL_NAME = '四川省骨科医院'
+
+// 换卡种要换卡号：已读到的卡号属于上一种证件，留着会误导护士
+watch(cardType, () => { cardNo.value = '' })
 
 const patient = computed(() => (pid.value ? getPatient(pid.value) : null))
 const schedule = computed(() => {
@@ -220,7 +307,7 @@ function doQuery() {
   const p = state.patients.find((x) => x.inpatientNo === kw) ||
     state.patients.find((x) => state.applies.some((a) => a.patientId === x.patientId && a.applyNo === kw))
   if (!p) return ElMessage.error('未找到该住院号对应的日间手术患者，请确认住院号或扫描申请单条码')
-  checkInMethod.value = '手工输入住院号'
+  checkInMethod.value = CHECKIN_METHODS.MANUAL
   pid.value = p.patientId
   loadExams(p.patientId)
 }
@@ -235,27 +322,47 @@ function mockScan() {
   if (!s) return ElMessage.warning('今日没有待报到患者')
   const p = getPatient(s.patientId)
   keyword.value = p.inpatientNo
-  checkInMethod.value = '扫申请单条码'
+  checkInMethod.value = CHECKIN_METHODS.SCAN
   pid.value = p.patientId
   loadExams(p.patientId)
   ElMessage.success(`已扫描申请单条码：${p.name} ${p.inpatientNo}`)
 }
 
-function mockCard() {
-  const s = pickToday()
-  if (!s) return ElMessage.warning('今日没有待报到患者')
-  const p = getPatient(s.patientId)
-  keyword.value = p.inpatientNo
-  checkInMethod.value = '刷医保卡 / 就诊卡'
-  pid.value = p.patientId
-  loadExams(p.patientId)
-  ElMessage.success(`已读取就诊卡：${p.name} ${p.inpatientNo}`)
+/**
+ * 刷卡报到：招标第 11 项「刷医保卡 / 就诊卡 / 身份证」
+ * 卡号留空时由读卡器模拟刷出今日待报到患者的卡片；填卡号则按该证件号定位患者。
+ */
+async function readByCard() {
+  const t = cardTypeOf(cardType.value)
+  let no = cardNo.value.trim()
+  if (!no) {
+    const s = pickToday()
+    if (!s) return ElMessage.warning('今日没有待报到患者')
+    no = cardNoOf(getPatient(s.patientId), t.value)
+    if (!no) return ElMessage.warning(`未取到该患者的${t.noLabel}，请手动输入后再刷卡`)
+  }
+  cardReading.value = true
+  try {
+    const res = await fetchPatientByCard(t.value, no)
+    const p = getPatient(res.patient.patientId)
+    if (!p) return ElMessage.error('该患者尚未在本系统建档，不能报到')
+    cardNo.value = res.cardNo
+    keyword.value = p.inpatientNo
+    checkInMethod.value = CHECKIN_METHODS[t.value]
+    pid.value = p.patientId
+    loadExams(p.patientId)
+    ElMessage.success(`已读取${t.label}（${res.cardNo}）：${p.name} ${p.inpatientNo}`)
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    cardReading.value = false
+  }
 }
 
 function pick(s) {
   const p = getPatient(s.patientId)
   keyword.value = p.inpatientNo
-  checkInMethod.value = '手工输入住院号'
+  checkInMethod.value = CHECKIN_METHODS.MANUAL
   pid.value = p.patientId
   loadExams(p.patientId)
 }
@@ -277,12 +384,18 @@ function openOne(exam) {
   oneDlg.value = true
 }
 
+/** 打印手术知情同意书：先打开套打模板预览，确认后再发送打印队列 */
 function printConsent() {
-  ElMessage.success('手术知情同意书已发送至打印队列（演示环境不输出纸质件）')
+  consentDlg.value = true
+}
+
+function confirmPrint() {
+  ElMessage.success('手术知情同意书已按套打模板发送至打印队列（演示环境不输出纸质件）')
+  consentDlg.value = false
   log({
     module: 'CIR', page: '手术报到', action: 'EXPORT', targetType: '手术知情同意书',
-    targetId: patient.value.inpatientNo, targetName: `${patient.value.name} 手术知情同意书`,
-    patientId: patient.value.patientId, reason: '报到时打印手术知情同意书'
+    targetId: patient.value.inpatientNo, targetName: `${patient.value.name} 手术知情同意书（套打模板）`,
+    patientId: patient.value.patientId, reason: '报到时按套打模板打印手术知情同意书'
   })
 }
 
@@ -345,4 +458,32 @@ if (pid.value) loadExams(pid.value)
 .flow-step.on .idx { background: #2b6cb0; color: #fff; }
 .flow-step .t { font-size: 12.5px; font-weight: 600; }
 .flow-step .d { font-size: 11.5px; color: #8a94a6; margin-top: 2px; }
+
+/* ---- 手术知情同意书套打预览 ---- */
+.consent-paper {
+  border: 1px solid #c9d2e0; border-radius: 4px; padding: 18px 22px;
+  background: #fff; color: #1f2d3d; font-size: 13px; line-height: 1.9;
+  box-shadow: 0 2px 8px rgba(31, 45, 61, .06);
+}
+.cp-head { text-align: center; border-bottom: 2px solid #1f2d3d; padding-bottom: 8px; }
+.cp-hospital { font-size: 16px; font-weight: 700; letter-spacing: 2px; }
+.cp-title { font-size: 18px; font-weight: 700; letter-spacing: 6px; margin-top: 2px; }
+.cp-code { font-size: 11px; color: #8a94a6; margin-top: 2px; }
+.cp-grid, .cp-row { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 10px; align-items: baseline; }
+.cp-row { display: flex; }
+.cp-grid .k, .cp-row .k { color: #5b6b82; flex: none; }
+.fill {
+  display: inline-block; min-height: 20px; line-height: 20px; text-align: center;
+  border-bottom: 1px solid #1f2d3d; padding: 0 6px; font-weight: 600;
+}
+.fill.w40 { width: 40px; } .fill.w72 { width: 72px; }
+.fill.w96 { width: 96px; } .fill.flex1 { flex: 1; text-align: left; }
+.cp-terms { margin-top: 14px; border-top: 1px dashed #9aa8bd; padding-top: 8px; }
+.cp-terms-h { font-weight: 700; margin-bottom: 4px; }
+.cp-terms ol { margin: 0; padding-left: 20px; font-size: 12.5px; color: #3a4a5f; }
+.cp-terms li { margin-bottom: 2px; }
+.cp-sign { margin-top: 16px; display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; font-size: 13px; }
+.cp-sign .line { display: inline-block; width: 130px; border-bottom: 1px solid #1f2d3d; height: 16px; vertical-align: bottom; }
+.cp-sign .line.short { width: 70px; }
+.cp-sign .line.xs { width: 34px; }
 </style>

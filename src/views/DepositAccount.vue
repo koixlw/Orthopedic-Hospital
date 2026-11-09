@@ -80,6 +80,22 @@
         </template>
       </PatientHeader>
 
+      <!-- 退出日间手术的记录：退出原因与说明（招标第 16 项要求留痕） -->
+      <div v-if="withdrawInfo" class="card" style="margin-bottom:14px">
+        <div class="card-head">
+          <div class="card-title">退出日间手术记录</div>
+          <div class="card-sub">
+            {{ withdrawInfo.auto ? '系统自动退出（评估不通过触发）' : '由管理中心发起退出' }}
+          </div>
+        </div>
+        <div class="flex" style="gap:32px;flex-wrap:wrap">
+          <div><div class="tiny">退出原因</div><div>{{ withdrawInfo.reason }}</div></div>
+          <div><div class="tiny">原因说明</div><div>{{ withdrawInfo.note || '—' }}</div></div>
+          <div><div class="tiny">退出时间</div><div class="num">{{ withdrawInfo.at ? withdrawInfo.at.slice(0, 16) : '—' }}</div></div>
+          <div><div class="tiny">操作人</div><div>{{ withdrawInfo.operator || '—' }}</div></div>
+        </div>
+      </div>
+
       <div class="money-grid" style="margin-bottom:14px">
         <div class="money-card blue">
           <div class="k"><el-icon><Wallet /></el-icon> 缴存总额</div>
@@ -356,10 +372,17 @@
           <el-radio-group v-model="withdrawForm.reason">
             <el-radio v-for="r in WITHDRAW_REASONS" :key="r" :label="r">{{ r }}</el-radio>
           </el-radio-group>
+          <div class="tiny mt8">
+            「{{ WITHDRAW_REASON_ANESTHESIA }}」＝麻醉评估没有通过、无法继续完成日间手术；
+            「{{ WITHDRAW_REASON_PHONE }}」＝病人电话联系日间手术中心告知不做手术。
+          </div>
         </el-form-item>
-        <el-form-item v-if="withdrawForm.reason === '其他'" label="原因说明" required>
+        <el-form-item v-if="noteVisible" :label="noteLabel" :required="noteRequired">
           <el-input v-model="withdrawForm.note" type="textarea" :rows="2" maxlength="200" show-word-limit
-            placeholder="选择「其他」时必须填写具体原因" />
+            :placeholder="notePlaceholder" />
+          <div v-if="withdrawForm.reason === WITHDRAW_REASON_ANESTHESIA && !anesthesiaFail" class="tiny mt8">
+            该患者暂无麻醉评估不通过记录，请核对后填写具体情况。
+          </div>
         </el-form-item>
       </el-form>
       <div class="hint-box warn">
@@ -464,7 +487,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -472,7 +495,11 @@ import { Search, Wallet, Coin, Lock, OfficeBuilding, Right, Plus, Warning } from
 import { fmtAmount } from '@/utils/format'
 import { get as getPatient } from '@/store/patients'
 import * as accStore from '@/store/accounts'
-import { WITHDRAW_REASONS, REVERSE_REASONS, PATIENT_STATUS } from '@/mock/dict'
+import { latest as latestEval, ANESTHESIA } from '@/store/evals'
+import {
+  WITHDRAW_REASONS, WITHDRAW_REASON_ANESTHESIA, WITHDRAW_REASON_PHONE, WITHDRAW_REASON_GIVEUP,
+  WITHDRAW_REASON_OTHER, REVERSE_REASONS, PATIENT_STATUS
+} from '@/mock/dict'
 import PatientHeader from '@/components/PatientHeader.vue'
 import { queryByPatient } from '@/store/logs'
 import { ACTION_LABEL } from '@/utils/audit'
@@ -516,6 +543,8 @@ const settlements = computed(() => {
   return account.value.settlement ? [account.value.settlement] : []
 })
 const hasFrozenSub = computed(() => subOrders.value.some((s) => Number(s.frozen) > 0 && s.status !== 'SETTLED'))
+// 已退出日间手术的记录（退出原因 / 说明 / 时间 / 操作人）
+const withdrawInfo = computed(() => patient.value?.withdrawInfo || null)
 const canFreeze = computed(() => !!account.value && account.value.status !== 'SETTLED' && Number(account.value.available) > 0)
 // 可发起退出：未结束日间手术流程、储值金未转入住院
 const canExit = computed(() =>
@@ -524,6 +553,36 @@ const canExit = computed(() =>
 // 已满足退出条件（手工发起退出 / 评估不通过自动退出）才可解冻
 const canUnfreeze = computed(() =>
   !!patient.value && patient.value.status === 'WITHDRAWN' && hasFrozenSub.value)
+
+// 招标第 16 项场景①：麻醉评估没有通过，无法继续完成日间手术 → 可由管理中心退出日间路径
+const anesthesiaFail = computed(() => {
+  const rec = patient.value ? latestEval(patient.value.patientId, ANESTHESIA) : null
+  return rec && rec.conclusion === 'FAILED' ? rec : null
+})
+const anesthesiaFailNote = computed(() => {
+  const rec = anesthesiaFail.value
+  if (!rec) return ''
+  return [rec.reason, rec.reasonNote].filter(Boolean).join('：')
+})
+// 退出原因决定说明区的标题、是否必填与提示语
+const noteVisible = computed(() => !!withdrawForm.reason && withdrawForm.reason !== WITHDRAW_REASON_GIVEUP)
+const noteRequired = computed(() =>
+  [WITHDRAW_REASON_ANESTHESIA, WITHDRAW_REASON_OTHER].includes(withdrawForm.reason))
+const noteLabel = computed(() => {
+  if (withdrawForm.reason === WITHDRAW_REASON_ANESTHESIA) return '评估情况'
+  if (withdrawForm.reason === WITHDRAW_REASON_PHONE) return '来电情况'
+  return '原因说明'
+})
+const notePlaceholder = computed(() => {
+  if (withdrawForm.reason === WITHDRAW_REASON_ANESTHESIA) return '填写麻醉评估不通过的具体情况（预填内容可修改）'
+  if (withdrawForm.reason === WITHDRAW_REASON_PHONE) return '记录来电人、来电时间与患者表述（如：患者本人今日 09:40 来电，因发热取消本次手术）'
+  return '选择「其他」时必须填写具体原因'
+})
+// 选中「麻醉评估不通过」时，把该患者的麻醉评估不通过结论预填进说明区
+watch(() => withdrawForm.reason, (r) => {
+  withdrawForm.note = ''
+  if (r === WITHDRAW_REASON_ANESTHESIA) withdrawForm.note = anesthesiaFailNote.value
+})
 
 // 本患者留痕：按时间倒序取最新 6 条（日志本身只追加，不改动）
 const accountLogs = computed(() => {
@@ -635,7 +694,12 @@ function openWithdraw() {
 
 function doWithdraw() {
   if (!withdrawForm.reason) return ElMessage.warning('请选择退出原因')
-  if (withdrawForm.reason === '其他' && !withdrawForm.note) return ElMessage.warning('选择「其他」时必须填写原因说明')
+  if (withdrawForm.reason === WITHDRAW_REASON_ANESTHESIA && !withdrawForm.note.trim()) {
+    return ElMessage.warning('请填写麻醉评估不通过的具体情况')
+  }
+  if (withdrawForm.reason === WITHDRAW_REASON_OTHER && !withdrawForm.note.trim()) {
+    return ElMessage.warning('选择「其他」时必须填写原因说明')
+  }
   try {
     accStore.exitDaySurgery(patient.value.patientId, withdrawForm.reason, withdrawForm.note)
     withdrawDlg.value = false

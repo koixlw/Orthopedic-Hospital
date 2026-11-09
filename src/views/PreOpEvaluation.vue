@@ -224,7 +224,7 @@ import * as evalStore from '@/store/evals'
 import { get as getPatient } from '@/store/patients'
 import { queryByPatient } from '@/store/logs'
 import { fetchExamReports } from '@/api/his'
-import { ANESTHESIA_TYPES } from '@/mock/dict'
+import { ANESTHESIA_TYPES, WITHDRAW_REASON_ANESTHESIA } from '@/mock/dict'
 import { ACTION_LABEL } from '@/utils/audit'
 import ExamList from '@/components/ExamList.vue'
 import ReportDrawer from '@/components/ReportDrawer.vue'
@@ -332,11 +332,11 @@ function submit() {
       if (evalType.value === 'ANESTHESIA') {
         evalStore.submitAnesthesia(patient.value.patientId, { ...form })
         if (form.conclusion === 'PASSED') ElMessage.success(`麻醉评估已通过，患者 ${patient.value.name} 可创建手术预约`)
-        else ElMessage.warning('麻醉评估不通过已记录，该患者不能创建手术预约，可办理退出日间手术')
+        else ElMessage.warning(`麻醉评估不通过已记录，该患者不能创建手术预约，已自动退出日间手术路径（退出原因：${WITHDRAW_REASON_ANESTHESIA}）`)
       } else {
         evalStore.submitSpecialist(patient.value.patientId, { ...form })
         if (form.conclusion === 'PASSED') ElMessage.success(`专科评估已通过，患者 ${patient.value.name} 已流转至待麻醉评估`)
-        else ElMessage.warning('评估不通过已记录。该患者不能创建手术预约，可办理退出日间手术（原因已预填）')
+        else ElMessage.warning('评估不通过已记录。该患者不能创建手术预约，已自动退出日间手术路径（退出原因：评估不通过）')
       }
       resetForm()
       // 专科通过后自动切到麻醉评估；全部完成则回到列表
@@ -349,8 +349,10 @@ function submit() {
   }
 
   if (form.conclusion === 'FAILED') {
+    // 招标第 16 项：评估不通过即自动退出日间路径，退出原因按评估类型记
+    const autoReason = evalType.value === 'ANESTHESIA' ? WITHDRAW_REASON_ANESTHESIA : '评估不通过'
     ElMessageBox.confirm(
-      `确认提交「不通过」评估结论？提交后该患者将不能创建手术预约，且结论不可撤销；如需退出日间手术，退出原因将自动填为「${form.reason === '其他' ? form.reasonNote : form.reason}」。`,
+      `确认提交「不通过」评估结论？提交后该患者将不能创建手术预约，且结论不可撤销；并自动退出日间手术路径，退出原因记为「${autoReason}」（${form.reason === '其他' ? form.reasonNote : form.reason}）。`,
       '提交不通过结论', { type: 'warning', confirmButtonText: '确认提交', cancelButtonText: '再想想' }
     ).then(doIt).catch(() => {})
   } else doIt()

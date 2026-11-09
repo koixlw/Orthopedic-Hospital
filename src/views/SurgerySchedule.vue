@@ -53,7 +53,7 @@
       </div>
 
       <!-- 列表视图 -->
-      <el-table v-else :data="daySchedules" size="small" border style="width:100%">
+      <el-table v-else :data="listSchedules" size="small" border style="width:100%">
         <el-table-column label="手术日期" width="112">
           <template #default="{ row }">
             <div class="num">{{ row.surgeryDate.slice(5) }}</div>
@@ -95,12 +95,15 @@
         <el-table-column label="状态" width="96">
           <template #default="{ row }">
             <el-tag size="small" :type="S_STATUS[row.status].type">{{ S_STATUS[row.status].label }}</el-tag>
+            <div v-if="row.status === 'CANCELLED' && row.cancelReason" class="tiny" style="margin-top:3px">
+              原因：{{ row.cancelReason }}
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="150" align="right">
           <template #default="{ row }">
-            <el-button v-if="can('sch.adjust')" link type="primary" size="small" @click="openAdjust(row)">调整安排</el-button>
-            <el-button v-if="can('sch.cancel')" link type="danger" size="small" @click="openCancel(row)">取消预约</el-button>
+            <el-button v-if="can('sch.adjust') && adjustable(row)" link type="primary" size="small" @click="openAdjust(row)">调整安排</el-button>
+            <el-button v-if="can('sch.cancel') && adjustable(row)" link type="danger" size="small" @click="openCancel(row)">取消预约</el-button>
           </template>
         </el-table-column>
         <template #empty><div class="empty">当日暂无手术排程</div></template>
@@ -366,7 +369,13 @@ const createForm = reactive({
 const adjustForm = reactive({ surgeryDate: '', room: '', seq: 1, surgeon: '', reason: '', channel: 'BOTH' })
 
 const dateLabel = computed(() => fmtDateCn(date.value))
+/** 日视图与排台台数：已取消的预约不占台，不计入 */
 const daySchedules = computed(() => sched.byDate(date.value).sort((a, b) => a.seq - b.seq))
+/** 列表视图：含已取消的预约，方便回看「取消原因」与取消留痕 */
+const listSchedules = computed(() =>
+  sched.listAll().filter((s) => s.surgeryDate === date.value).sort((a, b) => a.seq - b.seq))
+/** 已取消 / 已完成的预约不能再调整或取消，按钮直接隐藏 */
+const adjustable = (row) => ['SCHEDULED', 'CHANGED'].includes(row?.status)
 const candidates = computed(() => sched.scheduleable())
 /** 术前准备中的全部患者（含评估未通过的，下拉/卡片置灰展示，保证与其他页面数据互通可见） */
 const pool = computed(() => state.patients.filter((p) => p.status === 'DAY_SURGERY'))

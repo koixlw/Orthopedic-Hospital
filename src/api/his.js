@@ -20,5 +20,10 @@ export const fetchApplyPoolCount = () =>
 export const fetchPatientArchive = (inpatientNo) =>
   USE_MOCK ? mock.fetchPatientArchive(inpatientNo) : http.get(`/his/preop/archive?inpatientNo=${inpatientNo}`)
 
+/** 刷卡读取患者（招标第 11 项：刷医保卡 / 就诊卡 / 身份证） */
+export const fetchPatientByCard = (cardType, cardNo) =>
+  USE_MOCK ? mock.fetchPatientByCard(cardType, cardNo)
+    : http.get(`/his/preop/card?type=${cardType}&no=${encodeURIComponent(cardNo || '')}`)
+
 export const fetchExamReports = (patientId) =>
   USE_MOCK ? mock.fetchExamReports(patientId) : http.get(`/his/preop/reports?patientId=${patientId}`)

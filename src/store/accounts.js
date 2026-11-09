@@ -7,7 +7,7 @@ import { log } from './logs'
 import { get as getPatient } from './patients'
 import { fmtAmount, fmtTime, round2 } from '@/utils/format'
 import { goStatus, assertCan } from '@/utils/guard'
-import { ACCOUNT_STATUS, FLOW_TYPE } from '@/mock/dict'
+import { ACCOUNT_STATUS, FLOW_TYPE, WITHDRAW_REASONS, WITHDRAW_REASON_ANESTHESIA } from '@/mock/dict'
 
 export { ACCOUNT_STATUS, FLOW_TYPE }
 
@@ -281,13 +281,21 @@ export function transferIn(patientId) {
 
 /* ---------------- FUNC-DEP-004 发起退出日间手术 ▲ ----------------
  * 只退出日间手术路径，不动资金：冻结金额仍需由收费员办理解冻与门诊结算
+ * 退出原因按招标第 16 项：麻醉评估不通过 / 患者电话告知不做手术 / 患者放弃 / 其他（其他必填说明）
  * opts.auto = true 时为系统自动退出（评估不通过触发），不校验操作岗位
  */
 export function exitDaySurgery(patientId, reason, note = '', opts = {}) {
   if (!opts.auto) {
     assertCan('dep.exit', { module: 'DEP', page: '储值金管理', action: 'STATUS', label: '发起退出日间手术', targetType: '患者' })
+    if (!reason) throw new Error('请选择退出原因')
+    if (!WITHDRAW_REASONS.includes(reason)) throw new Error('退出原因不在可选范围内')
+    // 招标第 16 项场景①：麻醉评估不通过退出要写明评估情况，便于事后追溯
+    if (reason === WITHDRAW_REASON_ANESTHESIA && !String(note || '').trim()) {
+      throw new Error('请填写麻醉评估不通过的具体情况')
+    }
+  } else if (!reason) {
+    throw new Error('请选择退出原因')
   }
-  if (!reason) throw new Error('请选择退出原因')
   const patient = getPatient(patientId)
   if (!patient) throw new Error('未找到该患者')
   if (['WITHDRAWN', 'DISCHARGED'].includes(patient.status)) throw new Error('该患者已结束日间手术流程')
@@ -305,16 +313,20 @@ export function exitDaySurgery(patientId, reason, note = '', opts = {}) {
     operator: opts.auto ? '系统自动' : state.session.name,
     auto: !!opts.auto
   }
+  // 自动退出时按评估类型区分措辞；手工退出带上所选原因
+  const actionText = opts.auto
+    ? (reason === WITHDRAW_REASON_ANESTHESIA ? '麻醉评估不通过，自动退出日间手术' : '评估不通过，自动退出日间手术')
+    : '发起退出日间手术：' + reason
   goStatus(patient, 'WITHDRAWN', {
     by: patient.withdrawInfo.operator,
-    text: (opts.auto ? '评估不通过，自动退出日间手术：' : '发起退出日间手术：') + reason
+    text: actionText
   })
 
   log({
     module: 'DEP', page: '储值金管理', action: 'STATUS',
     targetType: '患者', targetId: patient.inpatientNo, targetName: patientLabel(patientId),
     patientId, before, after: { 患者状态: '已退出', 退出原因: reason },
-    reason: (opts.auto ? '评估不通过自动退出：' : '发起退出日间手术：') + reason + (note ? '（' + note + '）' : '')
+    reason: actionText + (note ? '（' + note + '）' : '')
   })
   persist()
   return patient

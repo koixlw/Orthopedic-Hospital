@@ -13,7 +13,7 @@ import { SURGERY_ROOMS, SURGERY_SEQS, ANESTHESIA_TYPES, CANCEL_REASONS } from '@
 export { SURGERY_ROOMS, SURGERY_SEQS, ANESTHESIA_TYPES, CANCEL_REASONS }
 
 export const START_TIMES = ['08:30', '09:30', '10:30']
-export const SURGEONS = ['张海涛', '李伟']
+export const SURGEONS = ['张海涛', '李伟', '周立']
 
 export const STATUS_MAP = {
   SCHEDULED: { label: '已预约', type: 'primary' },

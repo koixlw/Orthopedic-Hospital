@@ -63,7 +63,14 @@
         <el-table-column prop="code" label="编码" width="86">
           <template #default="{ row }"><span class="mono">{{ row.code }}</span></template>
         </el-table-column>
-        <el-table-column prop="name" label="名称" min-width="168" />
+        <el-table-column prop="name" label="名称" min-width="168">
+          <template #default="{ row }">
+            <span>{{ row.name }}</span>
+            <el-tag v-if="specCount(row) > 1" size="small" type="info" effect="plain" style="margin-left:6px">
+              {{ specCount(row) }} 个规格
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="spec" label="规格" width="108" />
         <el-table-column label="默认剂量" width="92" align="right">
           <template #default="{ row }">{{ row.dose }} {{ row.unit }}</template>
@@ -83,8 +90,8 @@
         </el-table-column>
         <el-table-column label="操作" width="180" align="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button link :type="row.enabled ? 'warning' : 'success'" size="small" @click="doToggle(row)">
+            <el-button v-if="can('dict.edit')" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button v-if="can('dict.toggle')" link :type="row.enabled ? 'warning' : 'success'" size="small" @click="doToggle(row)">
               {{ row.enabled ? '停用' : '启用' }}
             </el-button>
             <el-tooltip :disabled="!drugReferenced(row.code)" content="该药品已被医嘱引用，只能停用">
@@ -107,8 +114,16 @@
         <el-form-item label="编码" required>
           <el-input v-model="form.code" :disabled="!!editing" />
         </el-form-item>
-        <el-form-item label="名称" required><el-input v-model="form.name" /></el-form-item>
-        <el-form-item label="规格"><el-input v-model="form.spec" /></el-form-item>
+        <el-form-item label="名称" required>
+          <el-input v-model="form.name" />
+          <div class="tiny muted" v-if="tab === 'drug' && sameNameRows.length">
+            已有同药品规格：{{ sameNameRows.map(r => r.spec).join('、') }}（医嘱录入时可在「规格」下拉中切换）
+          </div>
+        </el-form-item>
+        <el-form-item label="规格">
+          <el-input v-model="form.spec" />
+          <div class="tiny muted" v-if="tab === 'drug'">同一药品的不同包装规格请新增为不同编码（名称相同），医嘱录入页即可切换规格</div>
+        </el-form-item>
         <template v-if="tab === 'item'">
           <el-form-item label="单位"><el-input v-model="form.unit" /></el-form-item>
           <el-form-item label="单价"><el-input-number v-model="form.price" :min="0" :precision="2" style="width:100%" /></el-form-item>
@@ -169,6 +184,14 @@ const rows = computed(() => {
 
 const itemReferenced = (code) => dict.itemReferenced(code)
 const drugReferenced = (code) => dict.drugReferenced(code)
+
+/** 同一种药的规格条数（名称相同、编码不同 = 不同包装规格） */
+const specCount = (row) => dict.drugs.value.filter((d) => !d.removed && d.name === row.name).length
+/** 新增/编辑药品时，同名药品已存在的其他规格 */
+const sameNameRows = computed(() => {
+  if (tab.value !== 'drug' || !form.name) return []
+  return dict.drugs.value.filter((d) => !d.removed && d.name === form.name && d.code !== form.code)
+})
 
 function resetFilter() {
   kw.value = ''

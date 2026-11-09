@@ -229,7 +229,7 @@
       <el-form label-width="88px">
         <el-form-item label="退回原因" required>
           <el-select v-model="returnForm.reason" placeholder="请选择" style="width:100%">
-            <el-option v-for="r in ['患者取消手术', '开单信息错误', '重复开单', '其他']" :key="r" :label="r" :value="r" />
+            <el-option v-for="r in RETURN_REASONS" :key="r" :label="r" :value="r" />
           </el-select>
         </el-form-item>
         <el-form-item v-if="returnForm.reason === '其他'" label="补充说明" required>
@@ -255,7 +255,8 @@ import { fetchApplyPool } from '@/api/his'
 import { state } from '@/store/db'
 import { poolCount, poolCountLoaded, refreshPoolCount } from '@/store/his'
 import {
-  all, STATUS_MAP, BIZ_MODE_TYPE, canApply, antiCoagText, receive, correct, returnApply, buildPatient
+  all, STATUS_MAP, BIZ_MODE_TYPE, canApply, antiCoagText, receive, correct, returnApply, buildPatient,
+  RETURN_REASONS
 } from '@/store/applies'
 import { BIZ_MODES } from '@/mock/dict'
 

@@ -1,7 +1,7 @@
 // 本地模拟 HIS：申请单池 + 患者档案 + 检查报告
 // 只读、不回写（SIM-001）；页面不直接引用本文件（SIM-002）
 import { state } from '@/store/db'
-import { seedApplyPool, seedPatients, seedExams } from './dict'
+import { seedApplyPool, seedPatients, seedExams, cardTypeOf, cardNoOf } from './dict'
 
 const DELAY = 800
 const clone = (x) => JSON.parse(JSON.stringify(x))
@@ -55,6 +55,29 @@ export function fetchPatientArchive(inpatientNo) {
         items: e.report.items, doctor: e.report.doctor, reviewer: e.report.reviewer
       })),
       exams: examList,
+      readAt: new Date().toISOString()
+    })
+  })
+}
+
+/**
+ * 刷卡读取患者：招标第 11 项「刷医保卡/就诊卡/身份证」
+ * @param {string} cardType MEDICAL_CARD | VISIT_CARD | ID_CARD
+ * @param {string} cardNo  读卡器读到的卡号 / 证件号
+ */
+export function fetchPatientByCard(cardType, cardNo) {
+  return later(() => {
+    const t = cardTypeOf(cardType)
+    const no = (cardNo || '').trim()
+    if (!no) throw new Error(`读卡器未读到${t.label}，请重新刷卡`)
+    const p = state.patients.find((x) => cardNoOf(x, t.value) === no)
+    if (!p) throw new Error(`未读到该${t.label}对应的患者信息，请核对${t.noLabel}或更换刷卡方式`)
+    return clone({
+      cardType: t.value, cardLabel: t.label, cardNo: no,
+      patient: {
+        patientId: p.patientId, name: p.name, gender: p.gender, age: p.age,
+        inpatientNo: p.inpatientNo, idCard: p.idCard, phone: p.phone, dept: p.dept
+      },
       readAt: new Date().toISOString()
     })
   })

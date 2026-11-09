@@ -39,7 +39,7 @@ export function add(patientId, form = {}) {
   assertCan('ord.add', { module: 'ORD', page: '手术医嘱', action: 'CREATE', label: '录入手术医嘱', targetType: '医嘱' })
   const drug = state.dicts.drugs.find((d) => d.code === form.drugCode)
   if (!drug) throw new Error('请选择药品')
-  if (!drug.enabled) throw new Error('该药品已停用，不能开立医嘱')
+  if (!drug.enabled) throw new Error('该药品规格已停用，不能开立医嘱')
   const dose = Number(form.dose)
   if (!(dose > 0)) throw new Error('剂量必须大于 0')
   if (!form.usage) throw new Error('请选择用法')
@@ -48,6 +48,9 @@ export function add(patientId, form = {}) {
   const isVerbal = !!form.isVerbal
   if (isVerbal && !String(form.reciter || '').trim()) throw new Error('口头医嘱必须填写复述人')
   if (isVerbal && !form.reciteTime) throw new Error('口头医嘱必须填写复述时间')
+  // 单位默认随规格联动，医师可手工改；提交时以填写值为准
+  const unit = String(form.unit || drug.unit || '').trim()
+  if (!unit) throw new Error('请选择剂量单位')
 
   const order = {
     orderId: nextOrderId(),
@@ -57,7 +60,7 @@ export function add(patientId, form = {}) {
     drugName: drug.name,
     spec: drug.spec,
     dose: round2(dose),
-    unit: drug.unit,
+    unit,
     usage: form.usage,
     freq: form.freq,
     startTime: form.startTime,
@@ -84,7 +87,7 @@ export function add(patientId, form = {}) {
     targetType: '医嘱', targetId: order.orderId, targetName: order.drugName + ' ' + order.dose + order.unit,
     patientId, before: null,
     after: {
-      药品: order.drugName, 剂量: order.dose + order.unit, 用法: order.usage,
+      药品: order.drugName, 规格: order.spec, 剂量: order.dose + order.unit, 用法: order.usage,
       频次: order.freq, 麻醉药: order.isAnesthetic ? '是' : '否',
       医嘱类型: isVerbal ? '口头医嘱' : '书面医嘱', 执行状态: '待提交',
       ...(isVerbal ? { 复述人: order.reciter } : {}),
@@ -132,7 +135,23 @@ export function patch(orderId, body = {}, reason = '') {
   if (o.execStatus === '已作废') throw new Error('已作废的医嘱不能修改')
   if (body.dose !== undefined && !(Number(body.dose) > 0)) throw new Error('剂量必须大于 0')
 
-  const before = { 剂量: o.dose + o.unit, 用法: o.usage, 频次: o.freq, ...(o.remark ? { 备注: o.remark } : {}) }
+  const before = { 药品: o.drugName, 规格: o.spec, 剂量: o.dose + o.unit, 用法: o.usage, 频次: o.freq, ...(o.remark ? { 备注: o.remark } : {}) }
+  // 换规格：按字典里的具体规格记录，同名不同规格＝不同编码
+  if (body.drugCode !== undefined && body.drugCode !== o.drugCode) {
+    const nd = state.dicts.drugs.find((d) => d.code === body.drugCode)
+    if (!nd) throw new Error('未找到该药品规格')
+    if (!nd.enabled) throw new Error('该药品规格已停用，不能选用')
+    o.drugCode = nd.code
+    o.drugName = nd.name
+    o.spec = nd.spec
+    o.isAnesthetic = !!nd.isAnesthetic
+    if (body.unit === undefined) o.unit = nd.unit
+  }
+  if (body.unit !== undefined) {
+    const u = String(body.unit).trim()
+    if (!u) throw new Error('请选择剂量单位')
+    o.unit = u
+  }
   if (body.dose !== undefined) o.dose = round2(Number(body.dose))
   if (body.usage !== undefined) o.usage = body.usage
   if (body.freq !== undefined) o.freq = body.freq
@@ -141,7 +160,7 @@ export function patch(orderId, body = {}, reason = '') {
     module: 'ORD', page: '手术医嘱', action: 'UPDATE',
     targetType: '医嘱', targetId: o.orderId, targetName: o.drugName + ' ' + o.dose + o.unit,
     patientId: o.patientId, before,
-    after: { 剂量: o.dose + o.unit, 用法: o.usage, 频次: o.freq, ...(o.remark ? { 备注: o.remark } : {}) },
+    after: { 药品: o.drugName, 规格: o.spec, 剂量: o.dose + o.unit, 用法: o.usage, 频次: o.freq, ...(o.remark ? { 备注: o.remark } : {}) },
     reason: reason || '修改手术医嘱'
   })
   persist()

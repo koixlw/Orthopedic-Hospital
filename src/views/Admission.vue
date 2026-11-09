@@ -4,6 +4,7 @@
       <span class="flex gap6"><span class="dot"></span>演示数据源 · 本地模拟 HIS</span>
       <span class="tiny">只读，不回写</span>
       <div class="right">
+        <span class="tiny">读取方式：{{ readMethod || '—' }}</span>
         <span class="tiny">最近读取：{{ lastRead || '—' }}</span>
         <el-button size="small" text :icon="Refresh" @click="read(lastNo, true)">重新读取</el-button>
       </div>
@@ -13,14 +14,29 @@
       <!-- 左：查询区 -->
       <div class="card" style="align-self:start">
         <div class="card-head"><div class="card-title">调入住院证</div></div>
-        <el-input v-model="inpatientNo" placeholder="请输入住院号或刷就诊卡" clearable size="large"
+        <el-input v-model="inpatientNo" placeholder="请输入住院号" clearable size="large"
           @keyup.enter="read(inpatientNo)">
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
         <div class="flex gap8 mt12">
           <el-button type="primary" :loading="loading" style="flex:1" @click="read(inpatientNo)">从 HIS 读取</el-button>
-          <el-button :icon="Postcard" @click="mockCard">模拟刷就诊卡</el-button>
         </div>
+
+        <div class="divider-h"></div>
+        <div class="tiny">刷卡调入 · 招标第 11 项：刷医保卡 / 就诊卡 / 身份证</div>
+        <div class="mt8">
+          <el-select v-model="cardType" size="large" style="width:100%">
+            <el-option v-for="c in CARD_READ_TYPES" :key="c.value" :label="c.label" :value="c.value" />
+          </el-select>
+          <el-input v-model="cardNo" class="mt8" size="large" clearable
+            :placeholder="'请输入' + cardTypeOf(cardType).noLabel">
+            <template #prefix><el-icon><Postcard /></el-icon></template>
+          </el-input>
+        </div>
+        <el-button class="mt8" style="width:100%" :icon="Postcard" :loading="cardReading" @click="readByCard">
+          刷卡调入住院证
+        </el-button>
+        <div class="tiny mt8">卡号留空直接点「刷卡调入住院证」，由读卡器模拟刷出待入院患者的卡片。</div>
         <div class="tiny mt12" style="line-height:1.95">
           <div>可办理入院：<b class="mono">D2026003</b> 已冻结 ¥8,000.00</div>
           <div>已入院：<b class="mono">D2026004</b> 验证撤销入口</div>
@@ -67,7 +83,7 @@
           </div>
 
           <div class="card">
-            <div class="section-h">日间手术住院证 <span class="src">来源：HIS 住院证</span></div>
+            <div class="section-h">日间手术住院证 <span class="src">来源：HIS 住院证 · 调入方式：{{ readMethod || '—' }}</span></div>
             <div class="cols c3" style="gap:10px">
               <div class="his-field"><div class="k">住院证号 <span class="his-tag">HIS</span></div><div class="v mono">{{ archive.admissionCert.admissionCertNo }}</div></div>
               <div class="his-field"><div class="k">诊断 <span class="his-tag">HIS</span></div><div class="v">{{ archive.admissionCert.diagnosis }}</div></div>
@@ -164,14 +180,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { can } from '@/store/session'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Postcard, Refresh, Warning } from '@element-plus/icons-vue'
-import { fetchPatientArchive } from '@/api/his'
+import { fetchPatientArchive, fetchPatientByCard } from '@/api/his'
 import { fmtAmount } from '@/utils/format'
 import { get as getPatient } from '@/store/patients'
 import { accountOf, transferIn } from '@/store/accounts'
 import { goStatus, assertCan } from '@/utils/guard'
 import { state, persist } from '@/store/db'
 import { log } from '@/store/logs'
-import { PATIENT_STATUS } from '@/mock/dict'
+import { PATIENT_STATUS, CARD_READ_TYPES, cardTypeOf, cardNoOf } from '@/mock/dict'
 import { fmtClock } from '@/utils/format'
 import ReportDrawer from '@/components/ReportDrawer.vue'
 
@@ -184,6 +200,15 @@ const lastNo = ref('')
 const archive = ref(null)
 const loading = ref(false)
 const lastRead = ref('')
+// 调入方式：住院号读取 / 刷医保卡 / 刷就诊卡 / 刷身份证（招标第 11 项）
+const readMethod = ref('')
+// 刷卡方式：招标第 11 项，刷医保卡 / 就诊卡 / 身份证
+const cardType = ref('MEDICAL_CARD')
+const cardNo = ref('')
+const cardReading = ref(false)
+
+// 换卡种要换卡号：已读到的卡号属于上一种证件，留着会误导护士
+watch(cardType, () => { cardNo.value = '' })
 const reportDlg = ref(false)
 const report = ref(null)
 const editDlg = ref(false)
@@ -232,16 +257,19 @@ const preList = computed(() => {
   ]
 })
 
-async function read(no, force) {
+async function read(no, force, method) {
   const num = (no || '').trim()
   if (!num) return ElMessage.warning('请输入住院号')
+  // 同一患者「重新读取」保留原调入方式；换成别的住院号则按住院号读取
+  const keep = num === lastNo.value ? readMethod.value : ''
   loading.value = true
   try {
     const res = await fetchPatientArchive(num)
     archive.value = res
     lastNo.value = num
     lastRead.value = fmtClock(new Date())
-    ElMessage.success('已从 HIS 读取患者信息')
+    readMethod.value = method || keep || '住院号读取'
+    ElMessage.success(method ? `已从 HIS 读取患者信息（${method}）` : '已从 HIS 读取患者信息')
   } catch (e) {
     if (force) {
       archive.value = null
@@ -253,10 +281,28 @@ async function read(no, force) {
   }
 }
 
-function mockCard() {
-  const target = state.patients.find((p) => p.status === 'SCHEDULED' && !p.admissionInfo) || state.patients[0]
-  inpatientNo.value = target.inpatientNo
-  read(target.inpatientNo)
+/**
+ * 刷卡调入：招标第 11 项「刷医保卡 / 就诊卡 / 身份证」
+ * 卡号留空时由读卡器模拟刷出待入院患者的卡片；填卡号则按该证件号定位患者。
+ */
+async function readByCard() {
+  const t = cardTypeOf(cardType.value)
+  let no = cardNo.value.trim()
+  if (!no) {
+    const target = state.patients.find((p) => p.status === 'SCHEDULED' && !p.admissionInfo) || state.patients[0]
+    no = cardNoOf(target, t.value)
+    if (!no) return ElMessage.warning(`未取到该患者的${t.noLabel}，请手动输入后再刷卡`)
+  }
+  cardReading.value = true
+  try {
+    const res = await fetchPatientByCard(t.value, no)
+    cardNo.value = res.cardNo
+    await read(res.patient.inpatientNo, false, `刷${t.label}`)
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    cardReading.value = false
+  }
 }
 
 function openReport(r) {
@@ -280,13 +326,14 @@ function doAdmit() {
       p.bedNo = bed
       p.admissionInfo = {
         admissionCertNo: p.admissionCertNo, bedNo: bed, admittedAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
-        guardian: '', guardianPhone: '', note: '', operator: state.session.name
+        guardian: '', guardianPhone: '', note: '', operator: state.session.name,
+        readMethod: readMethod.value || '住院号读取'
       }
       log({
         module: 'ADM', page: '入院登记', action: 'STATUS', targetType: '入院登记单',
         targetId: p.admissionCertNo, targetName: `${p.name} ${p.inpatientNo}`, patientId: p.patientId,
-        before, after: { 患者状态: '已入院', 床位: bed, 储值金: `转入住院 ¥${fmtAmount(account.value.inpatientDeposit)}` },
-        reason: '调入 HIS 住院证办理入院登记'
+        before, after: { 患者状态: '已入院', 床位: bed, 储值金: `转入住院 ¥${fmtAmount(account.value.inpatientDeposit)}`, 调入方式: readMethod.value || '住院号读取' },
+        reason: `调入 HIS 住院证办理入院登记（${readMethod.value || '住院号读取'}）`
       })
       persist()
       ElMessage.success('入院登记成功，可继续办理手术费用')

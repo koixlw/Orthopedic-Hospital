@@ -6,6 +6,7 @@ import { log } from './logs'
 import { get as getPatient } from './patients'
 import { exitDaySurgery } from './accounts'
 import { fmtTime } from '@/utils/format'
+import { WITHDRAW_REASON_ANESTHESIA } from '@/mock/dict'
 
 export const SPECIALIST = 'SPECIALIST'
 export const ANESTHESIA = 'ANESTHESIA'
@@ -221,13 +222,15 @@ export function submitAnesthesia(patientId, form) {
 /**
  * 评估不通过 → 自动退出日间手术路径
  * 只退路径，不动资金：冻结金额由收费员另行办理解冻与门诊结算
+ * 退出原因按招标第 16 项：麻醉评估不通过记「麻醉评估不通过」，专科评估不通过记「评估不通过」
  */
 function autoExit(patient, record) {
   if (!patient) return
   if (['WITHDRAWN', 'DISCHARGED'].includes(patient.status)) return
   const note = record.reasonNote ? record.reason + '：' + record.reasonNote : record.reason
+  const reason = record.type === ANESTHESIA ? WITHDRAW_REASON_ANESTHESIA : '评估不通过'
   try {
-    exitDaySurgery(patient.patientId, '评估不通过', note, { auto: true })
+    exitDaySurgery(patient.patientId, reason, note, { auto: true })
   } catch (e) {
     console.error('[autoExit] 自动退出日间手术失败', e)
   }

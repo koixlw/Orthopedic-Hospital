@@ -34,6 +34,7 @@ const routes = [
       { path: '/dict-group', name: 'dictGroup', component: () => import('@/views/DictGroup.vue'), meta: { title: '费用常用组套', perm: 'dict' } },
       { path: '/msg', name: 'msg', component: () => import('@/views/MsgCenter.vue'), meta: { title: '消息通知', perm: 'message' } },
       { path: '/log', name: 'log', component: () => import('@/views/OpLog.vue'), meta: { title: '操作日志', perm: 'log' } },
+      { path: '/query', name: 'query', component: () => import('@/views/SurgeryQuery.vue'), meta: { title: '手术查询', perm: 'report' } },
       { path: '/trace/:patientId?', name: 'trace', component: () => import('@/views/PatientTrace.vue'), meta: { title: '患者轨迹', perm: 'trace' } },
       { path: '/param', name: 'param', component: () => import('@/views/SysParam.vue'), meta: { title: '系统参数', perm: 'setting' } }
     ]

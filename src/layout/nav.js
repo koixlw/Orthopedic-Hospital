@@ -58,6 +58,7 @@ export const NAV_GROUPS = [
   {
     key: 'report', title: '管理与统计', module: 'report',
     items: [
+      { label: '手术查询', path: '/query', perm: 'report', icon: 'DataAnalysis' },
       { label: '患者轨迹', path: '/trace', perm: 'trace', icon: 'Position' },
       { label: '操作日志', path: '/log', perm: 'log', icon: 'List' },
       { label: '消息通知', path: '/msg', perm: 'message', icon: 'ChatDotSquare' }

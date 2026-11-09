@@ -31,27 +31,35 @@
       </div>
 
       <div class="entry-row">
-        <div class="fld" style="flex:1.5">
+        <div class="fld" style="flex:1.4">
           <div class="lb">药品</div>
-          <el-select v-model="form.drugCode" filterable :filter-method="filterDrug" placeholder="输入中文或拼音首字母，如 bbf"
-            style="width:100%" @change="onDrug">
-            <el-option v-for="d in drugOptions" :key="d.code" :label="d.name" :value="d.code">
+          <el-select v-model="form.drugName" filterable :filter-method="filterDrug" placeholder="输入中文或拼音首字母，如 bbf"
+            popper-class="spec-popper" style="width:100%" @change="onDrugName">
+            <el-option v-for="d in drugNames" :key="d.name" :label="d.name" :value="d.name">
               <span>{{ d.name }}</span>
-              <span class="tiny" style="float:right">{{ d.spec }}</span>
+              <span class="tiny opt-tail">{{ enabledSpecs(d).length }} 个规格</span>
             </el-option>
           </el-select>
         </div>
-        <div class="fld" style="width:118px">
+        <div class="fld" style="width:148px">
           <div class="lb">规格</div>
-          <el-input :model-value="drug?.spec" disabled class="field-readonly" />
+          <el-select v-model="form.drugCode" placeholder="先选药品" :disabled="!form.drugName" popper-class="spec-popper"
+            style="width:100%" @change="onSpec">
+            <el-option v-for="s in specOptions" :key="s.code" :label="s.spec" :value="s.code" :disabled="!s.enabled">
+              <span>{{ s.spec }}</span>
+              <span class="tiny opt-tail">{{ s.enabled ? s.dose + s.unit : '已停用' }}</span>
+            </el-option>
+          </el-select>
         </div>
-        <div class="fld" style="width:110px">
+        <div class="fld" style="width:104px">
           <div class="lb">剂量</div>
           <el-input-number v-model="form.dose" :min="0" :precision="2" controls-position="right" style="width:100%" />
         </div>
-        <div class="fld" style="width:74px">
+        <div class="fld" style="width:96px">
           <div class="lb">单位</div>
-          <el-input :model-value="drug?.unit" disabled class="field-readonly" />
+          <el-select v-model="form.unit" placeholder="选择单位" :disabled="!form.drugCode" style="width:100%">
+            <el-option v-for="u in unitOptions" :key="u" :label="u" :value="u" />
+          </el-select>
         </div>
         <div class="fld" style="width:116px">
           <div class="lb">用法</div>
@@ -78,6 +86,10 @@
           <div class="lb">&nbsp;</div>
           <el-button v-if="can('ord.add')" type="primary" style="width:100%" @click="doAdd">添加医嘱</el-button>
         </div>
+      </div>
+
+      <div class="tiny muted mt8">
+        规格与单位取自药品字典：选定药品后可在「规格」中切换包装规格，剂量单位、默认剂量与用法随之刷新；已停用规格灰显不可选。
       </div>
 
       <!-- 口头医嘱填写框：医师口述、护士复述，复述人与复述时间一并留痕 -->
@@ -112,6 +124,7 @@
         </el-select>
         <el-select v-model="filter.status" placeholder="状态" clearable size="small" style="width:120px">
           <el-option label="待提交" value="待提交" />
+          <el-option label="未执行" value="未执行" />
           <el-option label="执行中" value="执行中" />
           <el-option label="已执行" value="已执行" />
           <el-option label="已停止" value="已停止" />
@@ -233,6 +246,7 @@
         <div class="section-h">医嘱录入规则</div>
         <div class="rule-list">
           <div>新增医嘱先落为<b>待提交</b>记录，可在操作栏移除；确认无误后点击「一次性提交医嘱」全部提交。</div>
+          <div><b>规格</b>与<b>剂量单位</b>取自药品字典：同一药品的不同包装规格在「规格」中切换，切换后单位、默认剂量自动带出；已停用规格不可选。</div>
           <div><b>口头医嘱</b>须由护士复述并记录复述人与复述时间，未填复述信息不能提交。</div>
           <div><b>临时医嘱</b>一次执行，不可停嘱；<b>长期医嘱</b>可停嘱，停嘱后保留记录与停嘱时间。</div>
         <div>每条医嘱可填写<b>备注</b>（录入时选填，执行中可在「修改」里补充），用于记录术中特殊交代。</div>
@@ -247,8 +261,21 @@
       <template v-if="editRow">
         <el-form label-width="88px">
           <el-form-item label="药品"><el-input :model-value="editRow.drugName" disabled class="field-readonly" /></el-form-item>
+          <el-form-item label="规格">
+            <el-select v-model="editForm.drugCode" popper-class="spec-popper" style="width:100%" @change="onEditSpec">
+              <el-option v-for="s in editSpecs" :key="s.code" :label="s.spec" :value="s.code" :disabled="!s.enabled">
+                <span>{{ s.spec }}</span>
+                <span class="tiny opt-tail">{{ s.enabled ? s.dose + s.unit : '已停用' }}</span>
+              </el-option>
+            </el-select>
+          </el-form-item>
           <el-form-item label="剂量">
             <el-input-number v-model="editForm.dose" :min="0" :precision="2" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="单位">
+            <el-select v-model="editForm.unit" style="width:100%">
+              <el-option v-for="u in editUnitOptions" :key="u" :label="u" :value="u" />
+            </el-select>
           </el-form-item>
           <el-form-item label="用法">
             <el-select v-model="editForm.usage" style="width:100%">
@@ -290,10 +317,23 @@ import { USAGES, FREQS } from '@/mock/dict'
 import PatientHeader from '@/components/PatientHeader.vue'
 import PickPatient from '@/components/PickPatient.vue'
 
+// 药品拼音首字母：按药品名称索引（同名的多个规格共用一条）
 const PY = {
-  D0001: 'bbf bingbofen', D0002: 'rfnt ruifentaini', D0003: 'bbsaq bl', D0004: 'mdzl midazuolun',
-  D0005: 'liduokayin ldk', D0006: 'angdanst', D0007: 'toubaofuxin', D0008: 'luhuana',
-  D0009: 'rusuanlinshi', D0010: 'pantuolazuo', D0011: 'dipanmisong', D0012: 'qumaduo'
+  '丙泊酚注射液': 'bbf bingbofen',
+  '注射用瑞芬太尼': 'rfnt ruifentaini',
+  '苯磺顺阿曲库铵注射液': 'bbsaq bl',
+  '咪达唑仑注射液': 'mdzl midazuolun',
+  '盐酸利多卡因注射液': 'liduokayin ldk',
+  '注射用盐酸昂丹司琼': 'angdanst',
+  '注射用头孢呋辛钠': 'toubaofuxin',
+  '0.9% 氯化钠注射液': 'luhuana lh',
+  '乳酸林格氏液': 'rusuanlinshi',
+  '注射用泮托拉唑钠': 'pantuolazuo',
+  '地塞米松磷酸钠注射液': 'dipanmisong',
+  '盐酸曲马多注射液': 'qumaduo',
+  '盐酸罗哌卡因注射液': 'lpky luopokain',
+  '氨甲环酸注射液': 'amhs anhuansuan',
+  '注射用帕瑞昔布钠': 'prxbn paraisibu'
 }
 
 const route = useRoute()
@@ -301,7 +341,7 @@ const filter = reactive({ type: '', anes: '', status: '', kw: '' })
 const showRemoved = ref(false)
 const editDlg = ref(false)
 const editRow = ref(null)
-const editForm = reactive({ dose: 0, usage: '', freq: '', remark: '' })
+const editForm = reactive({ drugCode: '', dose: 0, unit: '', usage: '', freq: '', remark: '' })
 const drugKw = ref('')
 
 const form = reactive({
@@ -314,12 +354,40 @@ const form = reactive({
 const patient = computed(() => (route.params.patientId ? getPatient(route.params.patientId) : null))
 const schedule = computed(() => (patient.value ? activeSchedule(patient.value.patientId) : null))
 const list = computed(() => (patient.value ? ord.listOf(patient.value.patientId) : []))
-const drug = computed(() => state.dicts.drugs.find((d) => d.code === form.drugCode))
-const drugOptions = computed(() => state.dicts.drugs.filter((d) => {
-  if (!drugKw.value) return d.enabled
-  const kw = drugKw.value.toLowerCase()
-  return d.enabled && (d.name.includes(drugKw.value) || (PY[d.code] || '').includes(kw))
-}))
+// 药品字典按名称聚合：同名不同编码 = 同一种药的不同包装规格
+const drugGroups = computed(() => {
+  const map = new Map()
+  state.dicts.drugs.forEach((d) => {
+    if (d.removed) return
+    if (!map.has(d.name)) map.set(d.name, [])
+    map.get(d.name).push(d)
+  })
+  return Array.from(map, ([name, specs]) => ({ name, specs }))
+})
+// 药品下拉：按名称去重，规格条数作为副标题
+const drugNames = computed(() => {
+  const kw = drugKw.value.trim().toLowerCase()
+  return drugGroups.value.filter((g) => {
+    if (!g.specs.some((s) => s.enabled)) return false
+    if (!kw) return true
+    if (g.name.toLowerCase().includes(kw)) return true
+    if ((PY[g.name] || '').toLowerCase().includes(kw)) return true
+    return g.specs.some((s) => (s.spec || '').toLowerCase().includes(kw))
+  })
+})
+// 当前药品名下的全部规格（含停用规格，停用项灰显不可选）
+const specOptions = computed(() => {
+  const g = drugGroups.value.find((x) => x.name === form.drugName)
+  return g ? g.specs : []
+})
+// 单位候选：该药品各规格的计量单位（规格切换后自动带出对应单位）
+const unitOptions = computed(() => {
+  const set = new Set()
+  specOptions.value.forEach((s) => { if (s.enabled) set.add(s.unit) })
+  if (form.unit) set.add(form.unit)
+  return Array.from(set)
+})
+const enabledSpecs = (g) => g.specs.filter((s) => s.enabled)
 const anestheticCount = computed(() => list.value.filter((o) => o.isAnesthetic && !o.removed).length)
 const activeCount = computed(() => list.value.filter((o) => o.execStatus === '执行中' && !o.removed).length)
 // 待提交医嘱：新增后先落在这里，确认无误后一次性提交
@@ -335,12 +403,41 @@ const rows = computed(() => list.value
   .filter((o) => !filter.status || o.execStatus === filter.status)
   .filter((o) => !filter.kw || o.drugName.includes(filter.kw)))
 
+// 修改医嘱：该药品名下的全部规格
+const editSpecs = computed(() => {
+  const row = editRow.value
+  if (!row) return []
+  return state.dicts.drugs.filter((d) => d.name === row.drugName && !d.removed)
+})
+const editUnitOptions = computed(() => {
+  const set = new Set()
+  editSpecs.value.forEach((s) => { if (s.enabled) set.add(s.unit) })
+  if (editForm.unit) set.add(editForm.unit)
+  return Array.from(set)
+})
+
 function filterDrug(v) { drugKw.value = v }
 
-function onDrug(code) {
+/** 选药品：带出该药品的第一个可用规格 */
+function onDrugName(name) {
+  form.drugCode = ''
+  form.spec = ''
+  form.dose = 0
+  form.unit = ''
+  form.usage = ''
+  form.isAnesthetic = false
+  const g = drugGroups.value.find((x) => x.name === name)
+  if (!g) return
+  const first = g.specs.find((s) => s.enabled)
+  if (!first) return
+  form.drugCode = first.code
+  onSpec(first.code)
+}
+
+/** 切规格：剂量单位、默认剂量、默认用法随之刷新 */
+function onSpec(code) {
   const d = state.dicts.drugs.find((x) => x.code === code)
   if (!d) return
-  form.drugName = d.name
   form.spec = d.spec
   form.dose = d.dose
   form.unit = d.unit
@@ -349,10 +446,11 @@ function onDrug(code) {
 }
 
 function doAdd() {
+  if (!form.drugCode) return ElMessage.warning('请先选择药品规格')
   try {
     ord.add(patient.value.patientId, { ...form })
     ElMessage.success(
-      `已添加医嘱：${form.drugName} ${form.dose}${form.unit} ${form.usage}` +
+      `已添加医嘱：${form.drugName}（${form.spec}）${form.dose}${form.unit} ${form.usage}` +
       `${form.isAnesthetic ? '（麻醉药）' : ''}${form.isVerbal ? '（口头医嘱）' : ''}，当前状态「待提交」`
     )
     form.drugCode = ''
@@ -397,13 +495,26 @@ function stTag(row) {
 
 function openEdit(row) {
   editRow.value = row
-  Object.assign(editForm, { dose: row.dose, usage: row.usage, freq: row.freq, remark: row.remark || '' })
+  Object.assign(editForm, {
+    drugCode: row.drugCode, dose: row.dose, unit: row.unit,
+    usage: row.usage, freq: row.freq, remark: row.remark || ''
+  })
   editDlg.value = true
+}
+
+/** 修改医嘱时换规格：单位跟随新规格，剂量保留医师填写的值 */
+function onEditSpec(code) {
+  const d = state.dicts.drugs.find((x) => x.code === code)
+  if (!d) return
+  editForm.unit = d.unit
 }
 
 function saveEdit() {
   try {
-    ord.patch(editRow.value.orderId, { dose: editForm.dose, usage: editForm.usage, freq: editForm.freq, remark: editForm.remark }, '调整医嘱剂量、用法或备注')
+    ord.patch(editRow.value.orderId, {
+      drugCode: editForm.drugCode, dose: editForm.dose, unit: editForm.unit,
+      usage: editForm.usage, freq: editForm.freq, remark: editForm.remark
+    }, '调整医嘱规格、剂量、用法或备注')
     editDlg.value = false
     ElMessage.success('医嘱已更新')
   } catch (e) { ElMessage.error(e.message) }
@@ -466,4 +577,11 @@ function rowClass({ row }) {
 .rule-list b { color: var(--ink); font-weight: 600; }
 /* 口头医嘱填写区：与普通录入区区分，提示这是复述留痕 */
 .verbal-row { background: #fffaf0; border-color: #f0d9a8; }
+</style>
+
+<!-- 下拉弹层挂到 body，样式不能写在 scoped 里 -->
+<style>
+.spec-popper { min-width: 210px !important; }
+.spec-popper .el-select-dropdown__item { gap: 16px; }
+.opt-tail { margin-left: auto; color: #8a94a6; }
 </style>

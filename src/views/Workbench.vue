@@ -67,6 +67,7 @@
           </el-select>
           <el-select v-model="filters.evalStatus" placeholder="评估状态" clearable style="width:140px">
             <el-option label="待评估" value="PENDING" />
+            <el-option label="专科已通过" value="SPECIALIST_PASSED" />
             <el-option label="评估通过" value="PASSED" />
             <el-option label="评估不通过" value="FAILED" />
           </el-select>
@@ -299,10 +300,17 @@
             <el-radio-group v-model="withdrawForm.reason">
               <el-radio v-for="r in WITHDRAW_REASONS" :key="r" :label="r">{{ r }}</el-radio>
             </el-radio-group>
+            <div class="tiny mt8">
+              「{{ WITHDRAW_REASON_ANESTHESIA }}」＝麻醉评估没有通过、无法继续完成日间手术；
+              「{{ WITHDRAW_REASON_PHONE }}」＝病人电话联系日间手术中心告知不做手术。
+            </div>
           </el-form-item>
-          <el-form-item v-if="withdrawForm.reason === '其他'" label="原因说明" required>
+          <el-form-item v-if="noteVisible" :label="noteLabel" :required="noteRequired">
             <el-input v-model="withdrawForm.note" type="textarea" :rows="2" maxlength="100" show-word-limit
-              placeholder="请填写退出日间手术的具体原因" />
+              :placeholder="notePlaceholder" />
+            <div v-if="withdrawForm.reason === WITHDRAW_REASON_ANESTHESIA && !anesthesiaFail" class="tiny mt8">
+              该患者暂无麻醉评估不通过记录，请核对后填写具体情况。
+            </div>
           </el-form-item>
         </el-form>
       </div>
@@ -315,7 +323,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { DocumentAdd, Download, Search, RefreshLeft, Warning } from '@element-plus/icons-vue'
@@ -324,7 +332,11 @@ import { state } from '@/store/db'
 import { ACTION_LABEL } from '@/utils/audit'
 import { statCards, activeSchedule, patchPatient, accountOf } from '@/store/patients'
 import { canSchedule, evalSummary } from '@/utils/guard'
-import { WITHDRAW_REASONS, PATIENT_STATUS, ACCOUNT_STATUS } from '@/mock/dict'
+import { latest as latestEval, ANESTHESIA } from '@/store/evals'
+import {
+  WITHDRAW_REASONS, WITHDRAW_REASON_ANESTHESIA, WITHDRAW_REASON_PHONE, WITHDRAW_REASON_GIVEUP,
+  WITHDRAW_REASON_OTHER, PATIENT_STATUS, ACCOUNT_STATUS
+} from '@/mock/dict'
 import { can } from '@/store/session'
 import { log, query } from '@/store/logs'
 import { exitDaySurgery } from '@/store/accounts'
@@ -335,7 +347,7 @@ const statBy = ref('科室')
 const stats = computed(() => statCards())
 
 // 今日排台 + 最近操作（首页下半屏）
-const SCH_STATUS = { SCHEDULED: { label: '已预约', type: 'primary' }, CHANGED: { label: '已变更', type: 'warning' }, CHECKED_IN: { label: '已报到', type: 'success' }, DONE: { label: '已完成', type: 'info' }, CANCELLED: { label: '已取消', type: 'info' } }
+const SCH_STATUS = { SCHEDULED: { label: '已预约', type: 'primary' }, CHANGED: { label: '已变更', type: 'warning' }, CHECKED_IN: { label: '已报到', type: 'success' }, COMPLETED: { label: '已完成', type: 'info' }, CANCELLED: { label: '已取消', type: 'info' } }
 const todayBoard = computed(() =>
   state.schedules
     .filter((s) => s.surgeryDate === dayjs().format('YYYY-MM-DD') && s.status !== 'CANCELLED')
@@ -350,6 +362,36 @@ const filters = reactive({ keyword: '', account: '', evalStatus: '', range: [] }
 const withdrawDlg = ref(false)
 const withdrawTarget = ref(null)
 const withdrawForm = reactive({ reason: '', note: '' })
+
+// 招标第 16 项场景①：麻醉评估没有通过，无法继续完成日间手术 → 可由管理中心退出日间路径
+const anesthesiaFail = computed(() => {
+  const rec = withdrawTarget.value ? latestEval(withdrawTarget.value.patientId, ANESTHESIA) : null
+  return rec && rec.conclusion === 'FAILED' ? rec : null
+})
+const anesthesiaFailNote = computed(() => {
+  const rec = anesthesiaFail.value
+  if (!rec) return ''
+  return [rec.reason, rec.reasonNote].filter(Boolean).join('：')
+})
+// 退出原因决定说明区的标题、是否必填与提示语
+const noteVisible = computed(() => !!withdrawForm.reason && withdrawForm.reason !== WITHDRAW_REASON_GIVEUP)
+const noteRequired = computed(() =>
+  [WITHDRAW_REASON_ANESTHESIA, WITHDRAW_REASON_OTHER].includes(withdrawForm.reason))
+const noteLabel = computed(() => {
+  if (withdrawForm.reason === WITHDRAW_REASON_ANESTHESIA) return '评估情况'
+  if (withdrawForm.reason === WITHDRAW_REASON_PHONE) return '来电情况'
+  return '原因说明'
+})
+const notePlaceholder = computed(() => {
+  if (withdrawForm.reason === WITHDRAW_REASON_ANESTHESIA) return '填写麻醉评估不通过的具体情况（预填内容可修改）'
+  if (withdrawForm.reason === WITHDRAW_REASON_PHONE) return '记录来电人、来电时间与患者表述（如：患者本人今日 09:40 来电，因发热取消本次手术）'
+  return '选择「其他」时必须填写具体原因'
+})
+// 选中「麻醉评估不通过」时，把该患者的麻醉评估不通过结论预填进说明区
+watch(() => withdrawForm.reason, (r) => {
+  withdrawForm.note = ''
+  if (r === WITHDRAW_REASON_ANESTHESIA) withdrawForm.note = anesthesiaFailNote.value
+})
 
 const counts = computed(() => ({
   unplanned: state.patients.filter((p) => p.status === 'DAY_SURGERY' && !activeSchedule(p.patientId)).length,
@@ -377,7 +419,12 @@ const rows = computed(() => baseRows.value.filter((p) => {
   }
   if (filters.evalStatus) {
     const e = evalSummary(p)
-    const map = { PENDING: '待评估', PASSED: '评估通过', FAILED: '评估不通过' }
+    const map = {
+      PENDING: '待评估',
+      SPECIALIST_PASSED: '专科已通过',
+      PASSED: '评估通过',
+      FAILED: '评估不通过'
+    }
     if (e.label !== map[filters.evalStatus]) return false
   }
   if (filters.range && filters.range.length === 2) {
@@ -467,7 +514,12 @@ function openWithdraw(row) {
 
 function doWithdraw() {
   if (!withdrawForm.reason) return ElMessage.warning('请选择退出原因')
-  if (withdrawForm.reason === '其他' && !withdrawForm.note) return ElMessage.warning('选择「其他」时必须填写原因说明')
+  if (withdrawForm.reason === WITHDRAW_REASON_ANESTHESIA && !withdrawForm.note.trim()) {
+    return ElMessage.warning('请填写麻醉评估不通过的具体情况')
+  }
+  if (withdrawForm.reason === WITHDRAW_REASON_OTHER && !withdrawForm.note.trim()) {
+    return ElMessage.warning('选择「其他」时必须填写原因说明')
+  }
   try {
     exitDaySurgery(withdrawTarget.value.patientId, withdrawForm.reason, withdrawForm.note)
     withdrawDlg.value = false
