@@ -35,7 +35,3 @@ coverage/
 # Playwright MCP 抓取的页面快照与控制台日志（本地调试产物）
 .playwright-mcp/
 
-# 招标文件等本地参考资料与 Office 锁文件（不进仓库）
-*.docx
-~$*.docx
-问题描述_extract.txt
